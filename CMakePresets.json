@@ -1,0 +1,66 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "toolchainFile": "${sourceDir}/external/vcpkg/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "ninja-multi",
+            "displayName": "Ninja Multi-Config (Debug/Release/RelWithDebInfo)",
+            "inherits": "base",
+            "generator": "Ninja Multi-Config",
+            "architecture": { "value": "x64", "strategy": "external" },
+            "cacheVariables": {
+                "CMAKE_CONFIGURATION_TYPES": "Debug;Release;RelWithDebInfo"
+            }
+        },
+        {
+            "name": "ninja-debug",
+            "displayName": "Ninja Debug",
+            "inherits": "base",
+            "generator": "Ninja",
+            "architecture": { "value": "x64", "strategy": "external" },
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+        },
+        {
+            "name": "ninja-release",
+            "displayName": "Ninja Release",
+            "inherits": "base",
+            "generator": "Ninja",
+            "architecture": { "value": "x64", "strategy": "external" },
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+        },
+        {
+            "name": "vs2022",
+            "displayName": "Visual Studio 2022 x64",
+            "inherits": "base",
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+        },
+        {
+            "name": "vs2022-asan",
+            "displayName": "Visual Studio 2022 x64 + AddressSanitizer",
+            "inherits": "vs2022",
+            "cacheVariables": { "GAME_ENABLE_SANITIZERS": "ON" }
+        }
+    ],
+    "buildPresets": [
+        { "name": "debug", "configurePreset": "ninja-multi", "configuration": "Debug" },
+        { "name": "release", "configurePreset": "ninja-multi", "configuration": "Release" },
+        { "name": "relwithdebinfo", "configurePreset": "ninja-multi", "configuration": "RelWithDebInfo" },
+        { "name": "ninja-debug", "configurePreset": "ninja-debug" },
+        { "name": "ninja-release", "configurePreset": "ninja-release" },
+        { "name": "vs-debug", "configurePreset": "vs2022", "configuration": "Debug" },
+        { "name": "vs-release", "configurePreset": "vs2022", "configuration": "Release" },
+        { "name": "vs-relwithdebinfo", "configurePreset": "vs2022", "configuration": "RelWithDebInfo" },
+        { "name": "vs-asan-debug", "configurePreset": "vs2022-asan", "configuration": "Debug" }
+    ]
+}
