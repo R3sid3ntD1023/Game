@@ -1,6 +1,7 @@
 #include "game/FirstPersonController.h"
 #include "eng/GameObject.h"
 #include "eng/World.h"
+#include "game/Weapon.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <cmath>
@@ -37,6 +38,10 @@ namespace game
         case GLFW_KEY_SPACE:
             m_jump = down;
             break;
+        case GLFW_KEY_R:
+            if (action == GLFW_PRESS)
+                m_reloadPressed = true;
+            break;
         default:
             break;
         }
@@ -51,17 +56,24 @@ namespace game
     void FirstPersonController::OnMouseButton(int button, int action)
     {
         if (button == GLFW_MOUSE_BUTTON_LEFT)
+        {
             m_fireHeld = action == GLFW_PRESS;
+            if (action == GLFW_PRESS)
+                m_firePressed = true;
+        }
     }
 
     void FirstPersonController::OnUpdate(float dt)
     {
-        m_cooldown = std::max(0.0f, m_cooldown - dt);
-        if (m_fireHeld && m_cooldown <= 0.0f)
+        if (auto *weapon = gameObject->GetComponent<WeaponComponent>())
         {
-            Shoot();
-            m_cooldown = fireCooldown;
+            if (m_reloadPressed)
+                weapon->Reload();
+            if (weapon->Stats().automatic ? m_fireHeld : m_firePressed)
+                Shoot();
         }
+        m_firePressed = false;
+        m_reloadPressed = false;
 
         const float yaw = glm::radians(m_yaw), pitch = glm::radians(m_pitch);
         gfx::Camera &cam = gameObject->GetWorld().camera;
@@ -93,15 +105,10 @@ namespace game
 
     void FirstPersonController::Shoot()
     {
-        const gfx::Camera &cam = gameObject->GetWorld().camera;
-        eng::RayHit hit;
-        if (!gameObject->GetWorld().Physics().Raycast(cam.position, cam.forward, 100.0f, m_body, hit) || !hit.body)
-            return;
-
-        if (auto *health = hit.body->gameObject->GetComponent<eng::Health>())
+        if (auto *weapon = gameObject->GetComponent<WeaponComponent>())
         {
-            health->Damage(shotDamage);
-            spdlog::info("Hit {} ({:.0f} hp left)", hit.body->gameObject->name, health->current);
+            const gfx::Camera &cam = gameObject->GetWorld().camera;
+            weapon->Fire(cam.position, cam.forward, m_body);
         }
     }
 

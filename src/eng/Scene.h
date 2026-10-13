@@ -17,9 +17,13 @@ namespace eng
         float metallic = 0.0f;
         float roughness = 0.5f;
         glm::vec3 emissive{0.0f};
+        // Image paths relative to the assets folder; empty keeps the flat default.
+        std::string albedoMap;
+        std::string normalMap;
+        std::string metalRoughMap;
 
         template <class Archive>
-        void serialize(Archive &ar) { ar(name, color, metallic, roughness, emissive); }
+        void serialize(Archive &ar) { ar(name, color, metallic, roughness, emissive, albedoMap, normalMap, metalRoughMap); }
     };
 
     // `kind` selects a registered mesh generator (cube, sphere, plane, ...); `params` are its arguments.
@@ -28,9 +32,10 @@ namespace eng
         std::string name;
         std::string kind;
         std::vector<float> params;
+        std::string path; // kind "model": mesh file relative to the assets folder
 
         template <class Archive>
-        void serialize(Archive &ar) { ar(name, kind, params); }
+        void serialize(Archive &ar) { ar(name, kind, params, path); }
     };
 
     struct ObjectDesc
@@ -58,7 +63,7 @@ namespace eng
     struct SceneData
     {
         static constexpr uint32_t kMagic = 0x57444C47; // "GLDW"
-        static constexpr uint32_t kVersion = 1;
+        static constexpr uint32_t kVersion = 2;
 
         std::vector<MaterialDesc> materials;
         std::vector<MeshDesc> meshes;

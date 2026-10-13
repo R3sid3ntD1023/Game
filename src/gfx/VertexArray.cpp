@@ -12,7 +12,10 @@ namespace gfx
         for (const auto &a : layout)
         {
             glEnableVertexArrayAttrib(m_id, a.location);
-            glVertexArrayAttribFormat(m_id, a.location, a.components, GL_FLOAT, GL_FALSE, a.offset);
+            if (a.integer)
+                glVertexArrayAttribIFormat(m_id, a.location, a.components, GL_INT, a.offset);
+            else
+                glVertexArrayAttribFormat(m_id, a.location, a.components, GL_FLOAT, GL_FALSE, a.offset);
             glVertexArrayAttribBinding(m_id, a.location, 0);
         }
     }

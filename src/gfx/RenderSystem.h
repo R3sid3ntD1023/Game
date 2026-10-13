@@ -15,6 +15,14 @@ struct DrawElementsIndirectCommand {
     uint32_t baseInstance;
 };
 
+// Matches `struct Instance` in brdf.vert (std430).
+struct InstanceData {
+    glm::mat4 model;
+    uint32_t boneOffset;
+    uint32_t pad[3];
+};
+constexpr uint32_t kNoSkin = 0xFFFFFFFFu;
+
 // Sorts renderables by material, then mesh; emits one indirect command per (material, mesh)
 // and one glMultiDrawElementsIndirect call per material.
 class RenderSystem {
@@ -30,6 +38,7 @@ private:
         const Material* material;
         MeshHandle mesh;
         glm::mat4 model;
+        uint32_t boneOffset;
     };
     struct Batch {
         const Material* material;
@@ -40,9 +49,11 @@ private:
     MeshManager& m_meshes;
     GpuBuffer m_indirectBuffer;
     GpuBuffer m_modelBuffer;
+    GpuBuffer m_boneBuffer;
     std::vector<Item> m_items;
     std::vector<DrawElementsIndirectCommand> m_commands;
-    std::vector<glm::mat4> m_models;
+    std::vector<InstanceData> m_instances;
+    std::vector<glm::mat4> m_bones;
     std::vector<Batch> m_batches;
     size_t m_drawCalls = 0;
 };

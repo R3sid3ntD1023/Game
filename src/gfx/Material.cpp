@@ -7,13 +7,25 @@ namespace gfx
     namespace
     {
         std::atomic<uint32_t> g_nextId{1};
+
+        // Default textures are shared; each upload is a pixel transfer the driver may sync with rendering.
+        std::shared_ptr<Texture> SharedColor(std::weak_ptr<Texture> &cache, const glm::vec4 &color, bool srgb)
+        {
+            if (auto t = cache.lock())
+                return t;
+            auto t = Texture::FromColor(color, srgb);
+            cache = t;
+            return t;
+        }
+
+        std::weak_ptr<Texture> g_white, g_whiteLinear, g_flatNormal;
     }
 
     Material::Material(std::shared_ptr<Shader> shader) : m_id(g_nextId++), m_shader(std::move(shader))
     {
-        albedoMap = Texture::FromColor({1, 1, 1, 1}, true);
-        normalMap = Texture::FromColor({0.5f, 0.5f, 1.0f, 1}, false);
-        metalRoughMap = Texture::FromColor({1, 1, 1, 1}, false);
+        albedoMap = SharedColor(g_white, {1, 1, 1, 1}, true);
+        normalMap = SharedColor(g_flatNormal, {0.5f, 0.5f, 1.0f, 1}, false);
+        metalRoughMap = SharedColor(g_whiteLinear, {1, 1, 1, 1}, false);
     }
 
     void Material::Bind() const

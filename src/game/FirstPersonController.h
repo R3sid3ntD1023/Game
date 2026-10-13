@@ -22,8 +22,6 @@ public:
     float sprintSpeed = 10.0f;
     float jumpSpeed = 9.0f;
     float mouseSensitivity = 0.1f;
-    float shotDamage = 35.0f;
-    float fireCooldown = 0.25f;
 
 private:
     void Shoot();
@@ -31,9 +29,8 @@ private:
     eng::RigidBody* m_body = nullptr;
     float m_yaw = 0.0f; // degrees; 0 looks down +X
     float m_pitch = 0.0f;
-    float m_cooldown = 0.0f;
     bool m_forward = false, m_back = false, m_left = false, m_right = false, m_sprint = false, m_jump = false;
-    bool m_fireHeld = false;
+    bool m_fireHeld = false, m_firePressed = false, m_reloadPressed = false;
 };
 
 } // namespace game

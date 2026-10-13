@@ -34,7 +34,7 @@ namespace gfx
         glCreateBuffers(1, &m_id);
         m_capacity = initialCapacityBytes;
         m_size = 0;
-        glNamedBufferData(m_id, static_cast<GLsizeiptr>(m_capacity), nullptr, GL_DYNAMIC_DRAW);
+        glNamedBufferStorage(m_id, static_cast<GLsizeiptr>(m_capacity), nullptr, GL_DYNAMIC_STORAGE_BIT);
     }
 
     void GpuBuffer::Reserve(size_t bytes)
@@ -44,7 +44,7 @@ namespace gfx
         size_t newCap = std::max(bytes, m_capacity * 2);
         GLuint newId = 0;
         glCreateBuffers(1, &newId);
-        glNamedBufferData(newId, static_cast<GLsizeiptr>(newCap), nullptr, GL_DYNAMIC_DRAW);
+        glNamedBufferStorage(newId, static_cast<GLsizeiptr>(newCap), nullptr, GL_DYNAMIC_STORAGE_BIT);
         if (m_size > 0)
             glCopyNamedBufferSubData(m_id, newId, 0, 0, static_cast<GLsizeiptr>(m_size));
         glDeleteBuffers(1, &m_id);

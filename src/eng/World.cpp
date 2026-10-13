@@ -21,6 +21,14 @@ namespace eng
         return *m_objects.back();
     }
 
+    GameObject *World::Find(const std::string &name) const
+    {
+        for (const auto &o : m_objects)
+            if (o->IsAlive() && o->name == name)
+                return o.get();
+        return nullptr;
+    }
+
     void World::Update(float dt)
     {
         for (size_t i = 0; i < m_objects.size(); ++i)

@@ -12,9 +12,11 @@ namespace core
     namespace
     {
 
-        void APIENTRY OnGlDebug(GLenum, GLenum, GLuint, GLenum severity, GLsizei, const GLchar *msg, const void *)
+        void APIENTRY OnGlDebug(GLenum, GLenum type, GLuint, GLenum severity, GLsizei, const GLchar *msg, const void *)
         {
-            if (severity == GL_DEBUG_SEVERITY_HIGH)
+            if (type == GL_DEBUG_TYPE_PERFORMANCE)
+                spdlog::debug("GL: {}", msg); // driver hints, e.g. one-time upload syncs
+            else if (severity == GL_DEBUG_SEVERITY_HIGH)
                 spdlog::error("GL: {}", msg);
             else if (severity == GL_DEBUG_SEVERITY_MEDIUM)
                 spdlog::warn("GL: {}", msg);
@@ -75,6 +77,19 @@ namespace core
     {
         glfwSetInputMode(m_window, GLFW_CURSOR, captured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
         m_input.ResetMouse();
+    }
+
+    glm::vec2 Window::CursorPosition() const
+    {
+        double x = 0.0, y = 0.0;
+        glfwGetCursorPos(m_window, &x, &y);
+        int ww = 0, wh = 0;
+        glfwGetWindowSize(m_window, &ww, &wh);
+        if (ww <= 0 || wh <= 0)
+            return {-1.0f, -1.0f};
+        const glm::ivec2 fb = FramebufferSize();
+        return {static_cast<float>(x) * static_cast<float>(fb.x) / static_cast<float>(ww),
+                static_cast<float>(y) * static_cast<float>(fb.y) / static_cast<float>(wh)};
     }
 
     glm::ivec2 Window::FramebufferSize() const

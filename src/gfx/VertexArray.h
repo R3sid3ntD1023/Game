@@ -8,6 +8,7 @@ struct VertexAttribute {
     GLuint location;
     GLint components;
     GLuint offset;
+    bool integer = false;
 };
 
 class VertexArray {

@@ -12,7 +12,9 @@ namespace gfx
                               {{0, 3, static_cast<GLuint>(offsetof(Vertex, position))},
                                {1, 3, static_cast<GLuint>(offsetof(Vertex, normal))},
                                {2, 2, static_cast<GLuint>(offsetof(Vertex, uv))},
-                               {3, 4, static_cast<GLuint>(offsetof(Vertex, tangent))}});
+                               {3, 4, static_cast<GLuint>(offsetof(Vertex, tangent))},
+                               {4, 4, static_cast<GLuint>(offsetof(Vertex, boneIds)), true},
+                               {5, 4, static_cast<GLuint>(offsetof(Vertex, boneWeights))}});
         m_vao.SetIndexBuffer(m_ibo);
     }
 

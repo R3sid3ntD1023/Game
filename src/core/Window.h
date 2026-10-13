@@ -24,8 +24,10 @@ namespace core
         void SetCursorCaptured(bool captured);
 
         glm::ivec2 FramebufferSize() const;
+        glm::vec2 CursorPosition() const; // framebuffer pixels, origin top-left
         double Time() const;
         Input &GetInput() { return m_input; }
+        GLFWwindow *Handle() const { return m_window; }
 
     private:
         GLFWwindow *m_window = nullptr;

@@ -5,6 +5,7 @@
         "spdlog",
         "entt",
         "cereal",
+        "assimp",
         "glfw3",
         "glm",
         "stb",

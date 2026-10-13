@@ -1,22 +1,26 @@
 #include <glad/glad.h>
 
+#include "game/Game.h"
+#include "eng/Animator.h"
 #include "eng/BuiltinComponents.h"
 #include "eng/RigidBody.h"
+#include "eng/Scene.h"
+#include "eng/SceneLoader.h"
 #include "eng/Script.h"
 #include "game/DinosaurAI.h"
 #include "game/EscapeZone.h"
 #include "game/FirstPersonController.h"
-#include "game/Game.h"
+#include "game/Interaction.h"
+#include "game/IslandScene.h"
+#include "game/RaptorModel.h"
 #include "game/Terrain.h"
-#include "gfx/Primitives.h"
+#include "game/Weapon.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
-#include <cmath>
+#include <filesystem>
 #include <format>
-#include <glm/gtc/constants.hpp>
-#include <glm/gtc/quaternion.hpp>
-#include <random>
 #include <spdlog/spdlog.h>
+#include <stdexcept>
 
 namespace game
 {
@@ -24,157 +28,184 @@ namespace game
     namespace
     {
 
-        constexpr int kDinosaurCount = 14;
-        constexpr int kTreeCount = 140;
-        constexpr int kRockCount = 40;
+        constexpr int kTrees = 140;
+        constexpr int kRocks = 40;
+        constexpr int kRaptors = 14;
+
+        float Param(const std::vector<float> &p, size_t i, float fallback) { return i < p.size() ? p[i] : fallback; }
 
     } // namespace
 
-    Game::Game()
+    Game::Game(std::string startWorld, bool regenerate)
         : m_window(1280, 720, "Escape the Island"),
           m_post(m_window.FramebufferSize().x, m_window.FramebufferSize().y)
     {
-        BuildWorld();
+        m_hud = std::make_unique<Hud>(m_canvas.Root());
+
+        MenuCallbacks callbacks;
+        callbacks.play = [this](const std::string &world)
+        { StartGame(world, m_menus->Regenerate()); };
+        callbacks.resume = [this]
+        { SetScreen(Screen::Playing); };
+        callbacks.toMenu = [this]
+        { ReturnToMenu(); };
+        callbacks.quit = [this]
+        { m_window.SetShouldClose(); };
+        m_menus = std::make_unique<MenuScreens>(m_canvas.Root(), std::move(callbacks), m_post);
+
+        SetScreen(Screen::Menu);
+        if (!startWorld.empty())
+            StartGame(startWorld, regenerate);
     }
 
-    void Game::BuildWorld()
+    void Game::SetScreen(Screen screen)
     {
-        auto &meshes = m_world.Meshes();
-        auto shader = std::make_shared<gfx::Shader>(SHADER_DIR "brdf.vert", SHADER_DIR "brdf.frag");
+        m_screen = screen;
+        const bool playing = screen == Screen::Playing && m_world && m_state.status == Status::Playing;
+        m_window.SetCursorCaptured(playing);
+        m_window.GetInput().SetReceiver(playing ? m_receiver : nullptr);
 
-        auto makeMaterial = [&](glm::vec3 color, float metallic, float roughness)
+        m_menus->ShowMain(screen == Screen::Menu);
+        m_menus->ShowPause(screen == Screen::Paused);
+        m_hud->SetVisible(screen != Screen::Menu && m_world != nullptr);
+    }
+
+    void Game::ReturnToMenu()
+    {
+        m_window.GetInput().SetReceiver(nullptr);
+        m_receiver = nullptr;
+        m_player = nullptr;
+        m_world.reset();
+        m_state = GameState{};
+        SetScreen(Screen::Menu);
+    }
+
+    void Game::StartGame(const std::string &world, bool regenerate)
+    {
+        m_menus->SetMessage("");
+        m_window.GetInput().SetReceiver(nullptr);
+        m_receiver = nullptr;
+        m_player = nullptr;
+        m_world.reset();
+        m_state = GameState{};
+
+        try
         {
-            auto m = std::make_shared<gfx::Material>(shader);
-            m->baseColor = glm::vec4(color, 1.0f);
-            m->metallic = metallic;
-            m->roughness = roughness;
-            return m;
-        };
-
-        const gfx::MeshHandle cube = meshes.Create(gfx::primitives::Cube(0.5f));
-        const gfx::MeshHandle sphere = meshes.Create(gfx::primitives::Sphere(0.5f));
-        const gfx::MeshHandle terrainMesh = meshes.Create(Terrain::BuildMesh());
-        const gfx::MeshHandle seaMesh = meshes.Create(gfx::primitives::Plane(300.0f, 1.0f));
-
-        const auto grass = makeMaterial({0.22f, 0.36f, 0.12f}, 0.0f, 0.9f);
-        const auto sea = makeMaterial({0.05f, 0.25f, 0.4f}, 0.0f, 0.05f);
-        const auto bark = makeMaterial({0.3f, 0.2f, 0.1f}, 0.0f, 0.8f);
-        const auto leaves = makeMaterial({0.1f, 0.3f, 0.08f}, 0.0f, 0.7f);
-        const auto rock = makeMaterial({0.4f, 0.4f, 0.4f}, 0.0f, 0.6f);
-        const auto boat = makeMaterial({0.5f, 0.35f, 0.2f}, 0.0f, 0.5f);
-        const auto beaconMat = makeMaterial({0.1f, 0.1f, 0.1f}, 0.0f, 0.3f);
-        const std::shared_ptr<gfx::Material> dinoMats[2] = {makeMaterial({0.2f, 0.5f, 0.15f}, 0.0f, 0.6f),
-                                                            makeMaterial({0.5f, 0.45f, 0.15f}, 0.0f, 0.6f)};
-
-        m_world.Physics().SetHeightField(&Terrain::Height);
-        m_world.Physics().SetBoundsRadius(Terrain::kWalkRadius);
-        m_world.environment = std::make_shared<gfx::EnvironmentMap>(ASSETS_DIR "hdr/sky.hdr");
-
-        m_world.CreateGameObject("Terrain").AddComponent<eng::MeshRendererComponent>(terrainMesh, grass);
-        {
-            auto &s = m_world.CreateGameObject("Sea", {0.0f, Terrain::kSeaLevel, 0.0f});
-            s.AddComponent<eng::MeshRendererComponent>(seaMesh, sea);
+            m_world = std::make_unique<eng::World>();
+            BuildWorld(world, regenerate);
         }
-
-        const glm::vec2 startXZ{-62.0f, 40.0f};
-        const glm::vec2 beaconXZ{65.0f, -45.0f};
-
-        // Player
+        catch (const std::exception &e)
         {
-            const glm::vec3 pos{startXZ.x, Terrain::Height(startXZ.x, startXZ.y) + 2.0f, startXZ.y};
-            auto &p = m_world.CreateGameObject("Player", pos);
-            p.AddComponent<eng::RigidBody>(glm::vec3(0.35f, 0.9f, 0.35f));
-            p.AddComponent<eng::Health>(100.0f);
-            auto &scripts = p.AddComponent<eng::ScriptComponent>();
-            auto &fps = scripts.Add<FirstPersonController>();
-            fps.SetLook(glm::degrees(std::atan2(beaconXZ.y - startXZ.y, beaconXZ.x - startXZ.x)), 0.0f);
-            m_window.GetInput().SetReceiver(&scripts);
-            m_player = &p;
+            spdlog::error("Failed to start '{}': {}", world, e.what());
+            m_world.reset();
+            m_player = nullptr;
+            m_receiver = nullptr;
+            m_menus->SetMessage(e.what());
+            SetScreen(Screen::Menu);
+            return;
         }
+        SetScreen(Screen::Playing);
+    }
 
-        // Extraction beacon and boat
+    void Game::BuildWorld(const std::string &worldName, bool regenerate)
+    {
+        const std::string path = std::string(ASSETS_DIR) + "worlds/" + worldName + ".world";
+
+        eng::SceneData scene;
+        bool loaded = false;
+        if (!regenerate && std::filesystem::exists(path))
         {
-            const float h = Terrain::Height(beaconXZ.x, beaconXZ.y);
-            auto &b = m_world.CreateGameObject("Beacon", {beaconXZ.x, h + 7.0f, beaconXZ.y});
-            b.GetTransform().scale = {0.8f, 14.0f, 0.8f};
-            b.AddComponent<eng::MeshRendererComponent>(cube, beaconMat);
-            b.AddComponent<eng::ScriptComponent>().Add<EscapeZone>(*m_player, m_state, 6.0f);
-
-            const glm::vec2 dir = glm::normalize(beaconXZ);
-            const glm::vec2 boatXZ = dir * 95.0f;
-            auto &bt = m_world.CreateGameObject("Boat", {boatXZ.x, 0.0f, boatXZ.y});
-            bt.GetTransform().scale = {9.0f, 1.2f, 3.5f};
-            bt.GetTransform().rotation = glm::angleAxis(std::atan2(-dir.y, dir.x), glm::vec3(0, 1, 0));
-            bt.AddComponent<eng::MeshRendererComponent>(cube, boat);
-        }
-
-        std::mt19937 rng(1337);
-        std::uniform_real_distribution<float> unit(0.0f, 1.0f);
-        auto randomLandPoint = [&](float minHeight, float minFromStart)
-        {
-            for (;;)
+            try
             {
-                const float a = unit(rng) * glm::two_pi<float>();
-                const float r = std::sqrt(unit(rng)) * 85.0f;
-                const glm::vec2 p{std::cos(a) * r, std::sin(a) * r};
-                if (Terrain::Height(p.x, p.y) < minHeight)
-                    continue;
-                if (glm::distance(p, startXZ) < minFromStart || glm::distance(p, beaconXZ) < 8.0f)
-                    continue;
-                return p;
+                scene = eng::LoadScene(path);
+                loaded = true;
             }
-        };
-
-        for (int i = 0; i < kTreeCount; ++i)
+            catch (const std::exception &e)
+            {
+                spdlog::warn("Regenerating world: {}", e.what());
+            }
+        }
+        if (!loaded)
         {
-            const glm::vec2 p = randomLandPoint(1.0f, 12.0f);
-            const float h = Terrain::Height(p.x, p.y);
-            const float trunk = 4.0f + unit(rng) * 3.0f;
-
-            auto &t = m_world.CreateGameObject("Trunk", {p.x, h + trunk * 0.5f, p.y});
-            t.GetTransform().scale = {0.6f, trunk, 0.6f};
-            t.AddComponent<eng::MeshRendererComponent>(cube, bark);
-            t.AddComponent<eng::RigidBody>(glm::vec3(0.3f, trunk * 0.5f, 0.3f), true);
-
-            const float crown = 3.0f + unit(rng) * 2.0f;
-            auto &c = m_world.CreateGameObject("Crown", {p.x, h + trunk + crown * 0.3f, p.y});
-            c.GetTransform().scale = glm::vec3(crown);
-            c.AddComponent<eng::MeshRendererComponent>(sphere, leaves);
+            scene = worldName == "test" ? MakeTestScene() : MakeIslandScene(kTrees, kRocks, kRaptors);
+            eng::SaveScene(path, scene);
+            spdlog::info("Generated world '{}' -> {}", worldName, path);
         }
 
-        for (int i = 0; i < kRockCount; ++i)
-        {
-            const glm::vec2 p = randomLandPoint(0.5f, 10.0f);
-            const float s = 1.2f + unit(rng) * 2.5f;
-            auto &r = m_world.CreateGameObject("Rock", {p.x, Terrain::Height(p.x, p.y) + s * 0.25f, p.y});
-            r.GetTransform().scale = {s, s * 0.7f, s};
-            r.AddComponent<eng::MeshRendererComponent>(sphere, rock);
-            r.AddComponent<eng::RigidBody>(glm::vec3(s * 0.35f, s * 0.25f, s * 0.35f), true);
-        }
+        auto shader = std::make_shared<gfx::Shader>(SHADER_DIR "brdf.vert", SHADER_DIR "brdf.frag");
+        eng::SceneLoader loader(shader);
 
-        for (int i = 0; i < kDinosaurCount; ++i)
-        {
-            const glm::vec2 p = randomLandPoint(1.0f, 30.0f);
-            auto &d = m_world.CreateGameObject("Dinosaur", {p.x, Terrain::Height(p.x, p.y) + 1.0f, p.y});
-            d.GetTransform().scale = {3.0f, 1.5f, 1.2f}; // placeholder body
-            d.AddComponent<eng::MeshRendererComponent>(cube, dinoMats[i % 2]);
-            d.AddComponent<eng::RigidBody>(glm::vec3(1.2f, 0.75f, 1.0f));
-            d.AddComponent<eng::Health>(100.0f);
-            d.AddComponent<eng::ScriptComponent>().Add<DinosaurAI>(*m_player, m_state, 7.0f, 15.0f);
-        }
+        loader.RegisterMesh(kMeshTerrain, [](const eng::MeshDesc &d)
+                            { return Terrain::BuildMesh(static_cast<int>(Param(d.params, 0, 160.0f))); });
+        loader.RegisterMesh(kMeshRaptor, [](const eng::MeshDesc &)
+                            { return RaptorMesh(); });
 
-        spdlog::info("World built: {} objects", m_world.ObjectCount());
+        loader.RegisterScript(kScriptPlayer, [this](eng::GameObject &go, const std::vector<float> &p)
+                              {
+            go.AddComponent<WeaponComponent>();
+            auto &scripts = go.AddComponent<eng::ScriptComponent>();
+            auto &fps = scripts.Add<FirstPersonController>();
+            fps.SetLook(Param(p, 0, 0.0f), Param(p, 1, 0.0f));
+            scripts.Add<InteractionScript>(m_state);
+            m_receiver = &scripts;
+            m_player = &go; });
+
+        loader.RegisterScript(kScriptDinosaur, [this](eng::GameObject &go, const std::vector<float> &p)
+                              {
+            eng::GameObject *player = m_world->Find("Player");
+            if (!player)
+                throw std::runtime_error("Raptor needs a Player object");
+            go.AddComponent<eng::Animator>(RaptorSkeleton()).hook = RaptorPose;
+            go.AddComponent<eng::ScriptComponent>().Add<DinosaurAI>(*player, m_state, Param(p, 0, 8.0f), Param(p, 1, 12.0f)); });
+
+        loader.RegisterScript(kScriptEscape, [this](eng::GameObject &go, const std::vector<float> &p)
+                              {
+            eng::GameObject *player = m_world->Find("Player");
+            if (!player)
+                throw std::runtime_error("Escape zone needs a Player object");
+            go.AddComponent<eng::ScriptComponent>().Add<EscapeZone>(*player, m_state, Param(p, 0, 6.0f)); });
+
+        loader.RegisterScript(kScriptHealthPickup, [](eng::GameObject &go, const std::vector<float> &p)
+                              { go.AddComponent<HealthPickup>(Param(p, 0, 35.0f)); });
+
+        loader.RegisterScript(kScriptWeaponPickup, [](eng::GameObject &go, const std::vector<float> &p)
+                              {
+            WeaponStats s;
+            s.name = go.name;
+            s.damage = Param(p, 0, s.damage);
+            s.cooldown = Param(p, 1, s.cooldown);
+            s.magSize = static_cast<int>(Param(p, 2, static_cast<float>(s.magSize)));
+            s.reserve = static_cast<int>(Param(p, 3, static_cast<float>(s.reserve)));
+            s.automatic = Param(p, 4, 0.0f) > 0.5f;
+            s.reloadTime = Param(p, 5, s.reloadTime);
+            s.range = Param(p, 6, s.range);
+            go.AddComponent<WeaponPickup>(s); });
+
+        loader.RegisterScript(kScriptDoor, [](eng::GameObject &go, const std::vector<float> &p)
+                              { go.AddComponent<Door>(go.name, glm::vec3(Param(p, 0, 0.0f), Param(p, 1, 0.0f), Param(p, 2, 0.0f)), Param(p, 3, 1.5f)); });
+
+        if (!m_environment)
+            m_environment = std::make_shared<gfx::EnvironmentMap>(ASSETS_DIR "hdr/sky.hdr");
+        m_world->environment = m_environment;
+        m_world->Physics().SetHeightField(&Terrain::Height);
+        m_world->Physics().SetBoundsRadius(Terrain::kWalkRadius);
+
+        loader.Instantiate(*m_world, scene);
+        if (!m_player)
+            throw std::runtime_error("World '" + worldName + "' has no player object");
+
+        spdlog::info("World '{}' ready: {} objects", worldName, m_world->ObjectCount());
     }
 
     void Game::Run()
     {
         core::Input &input = m_window.GetInput();
-        m_window.SetCursorCaptured(true);
 
         double last = m_window.Time();
         double titleTimer = 0.0;
         int frames = 0;
-        bool prevBloomKey = false, prevRawKey = false;
+        bool prevEsc = false, prevBloomKey = false, prevRawKey = false;
+        Status prevStatus = Status::Playing;
 
         while (!m_window.ShouldClose())
         {
@@ -183,50 +214,80 @@ namespace game
             last = now;
             m_window.PollEvents();
 
-            if (input.IsKeyDown(GLFW_KEY_ESCAPE))
-                m_window.SetShouldClose();
+            const bool esc = input.IsKeyDown(GLFW_KEY_ESCAPE);
+            if (esc && !prevEsc)
+            {
+                if (m_screen == Screen::Playing)
+                {
+                    if (m_state.status == Status::Playing)
+                        SetScreen(Screen::Paused);
+                    else
+                        ReturnToMenu();
+                }
+                else if (m_screen == Screen::Paused)
+                {
+                    SetScreen(Screen::Playing);
+                }
+            }
+            prevEsc = esc;
+
             const bool bloomKey = input.IsKeyDown(GLFW_KEY_B);
             const bool rawKey = input.IsKeyDown(GLFW_KEY_F2);
-            if (bloomKey && !prevBloomKey)
-                m_post.bloomEnabled = !m_post.bloomEnabled;
-            if (rawKey && !prevRawKey)
-                m_post.showRaw = !m_post.showRaw;
+            if (m_screen == Screen::Playing)
+            {
+                if (bloomKey && !prevBloomKey)
+                    m_post.bloomEnabled = !m_post.bloomEnabled;
+                if (rawKey && !prevRawKey)
+                    m_post.showRaw = !m_post.showRaw;
+            }
             prevBloomKey = bloomKey;
             prevRawKey = rawKey;
 
-            if (m_state.status == Status::Playing)
+            if (m_world && m_screen == Screen::Playing && m_state.status == Status::Playing)
             {
-                m_world.Update(dt);
+                m_world->Update(dt);
                 if (m_player->GetComponent<eng::Health>()->Dead())
                     m_state.status = Status::Lost;
-                if (m_state.status != Status::Playing)
-                {
-                    m_window.SetCursorCaptured(false);
-                    input.SetReceiver(nullptr);
-                }
+            }
+            if (m_state.status != prevStatus)
+            {
+                prevStatus = m_state.status;
+                m_state.prompt.clear();
+                SetScreen(m_screen); // releases the cursor once the game is over
             }
 
             const glm::ivec2 size = m_window.FramebufferSize();
             if (size.x == 0 || size.y == 0)
                 continue;
 
-            m_post.Resize(size.x, size.y);
-            m_post.BeginScene();
-            m_world.Render(static_cast<float>(size.x) / static_cast<float>(size.y));
-            m_post.EndScene(size.x, size.y);
+            if (m_world)
+            {
+                m_post.Resize(size.x, size.y);
+                m_post.BeginScene();
+                m_world->Render(static_cast<float>(size.x) / static_cast<float>(size.y));
+                m_post.EndScene(size.x, size.y);
+            }
+            else
+            {
+                gfx::Framebuffer::BindScreen(size.x, size.y);
+                glClearColor(0.02f, 0.03f, 0.05f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
+            }
+
+            if (m_world && m_screen != Screen::Menu)
+                m_hud->Update(*m_player, m_state, static_cast<float>(now));
+
+            const bool cursorFree = m_screen != Screen::Playing || m_state.status != Status::Playing;
+            const glm::vec2 mouse = cursorFree ? m_window.CursorPosition() : glm::vec2(-1.0f);
+            m_canvas.Frame(glm::vec2(size), mouse, input.IsMouseDown(0));
             m_window.SwapBuffers();
 
             ++frames;
             titleTimer += dt;
             if (titleTimer >= 0.25)
             {
-                const auto *hp = m_player->GetComponent<eng::Health>();
-                const char *banner = m_state.status == Status::Won    ? " | YOU ESCAPED!"
-                                     : m_state.status == Status::Lost ? " | YOU WERE EATEN"
-                                                                      : "";
-                m_window.SetTitle(std::format("Escape the Island | HP {:.0f} | Kills {} | {} fps | {} draw calls{}",
-                                              hp->current, m_state.kills, static_cast<int>(frames / titleTimer),
-                                              m_world.DrawCalls(), banner));
+                m_window.SetTitle(std::format("Escape the Island | {} fps | {} draws",
+                                              static_cast<int>(frames / titleTimer), m_world ? m_world->DrawCalls() : 0));
                 frames = 0;
                 titleTimer = 0.0;
             }

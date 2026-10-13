@@ -1,5 +1,6 @@
 #pragma once
 #include "eng/BuiltinComponents.h"
+#include "eng/Animator.h"
 #include "eng/GameObject.h"
 #include "eng/RigidBody.h"
 #include "eng/Script.h"
@@ -24,6 +25,7 @@ private:
     eng::RigidBody* m_body = nullptr;
     eng::Health* m_health = nullptr;
     eng::Health* m_targetHealth = nullptr;
+    eng::Animator* m_animator = nullptr;
     float m_speed;
     float m_damage;
     float m_attackTimer = 0.0f;

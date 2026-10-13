@@ -34,6 +34,8 @@ namespace eng
         gfx::MeshManager &Meshes() { return m_meshes; }
         size_t DrawCalls() const { return m_renderer.LastDrawCalls(); }
         size_t ObjectCount() const { return m_objects.size(); }
+        const std::vector<std::unique_ptr<GameObject>> &Objects() const { return m_objects; }
+        GameObject *Find(const std::string &name) const; // first live object with this name
 
         gfx::Camera camera;
         std::shared_ptr<gfx::EnvironmentMap> environment; // optional; enables IBL and the sky

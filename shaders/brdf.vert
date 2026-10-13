@@ -4,9 +4,21 @@ layout(location = 0) in vec3 aPosition;
 layout(location = 1) in vec3 aNormal;
 layout(location = 2) in vec2 aUV;
 layout(location = 3) in vec4 aTangent;
+layout(location = 4) in ivec4 aBoneIds;
+layout(location = 5) in vec4 aBoneWeights;
 
-layout(std430, binding = 0) readonly buffer Models {
-    mat4 models[];
+struct Instance {
+    mat4 model;
+    uint boneOffset; // 0xFFFFFFFF = not skinned
+    uint pad0, pad1, pad2;
+};
+
+layout(std430, binding = 0) readonly buffer Instances {
+    Instance instances[];
+};
+
+layout(std430, binding = 1) readonly buffer Bones {
+    mat4 bones[];
 };
 
 uniform mat4 uViewProj;
@@ -19,12 +31,28 @@ out VS_OUT {
 
 void main() {
     // gl_InstanceID does not include baseInstance, so add it explicitly.
-    mat4 model = models[gl_BaseInstance + gl_InstanceID];
-    vec4 world = model * vec4(aPosition, 1.0);
+    Instance inst = instances[gl_BaseInstance + gl_InstanceID];
+    mat4 model = inst.model;
+
+    vec4 localPos = vec4(aPosition, 1.0);
+    vec3 localNormal = aNormal;
+    vec3 localTangent = aTangent.xyz;
+
+    if (inst.boneOffset != 0xFFFFFFFFu && dot(aBoneWeights, vec4(1.0)) > 0.0) {
+        mat4 skin = aBoneWeights.x * bones[inst.boneOffset + aBoneIds.x]
+                  + aBoneWeights.y * bones[inst.boneOffset + aBoneIds.y]
+                  + aBoneWeights.z * bones[inst.boneOffset + aBoneIds.z]
+                  + aBoneWeights.w * bones[inst.boneOffset + aBoneIds.w];
+        localPos = skin * localPos;
+        localNormal = mat3(skin) * localNormal;
+        localTangent = mat3(skin) * localTangent;
+    }
+
+    vec4 world = model * localPos;
 
     mat3 normalMat = transpose(inverse(mat3(model)));
-    vec3 N = normalize(normalMat * aNormal);
-    vec3 T = normalize(mat3(model) * aTangent.xyz);
+    vec3 N = normalize(normalMat * localNormal);
+    vec3 T = normalize(mat3(model) * localTangent);
     T = normalize(T - dot(T, N) * N);
     vec3 B = cross(N, T) * aTangent.w;
 

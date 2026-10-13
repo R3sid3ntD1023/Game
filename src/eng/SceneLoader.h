@@ -18,11 +18,12 @@ namespace eng
     class SceneLoader
     {
     public:
-        using MeshFactory = std::function<gfx::MeshData(const std::vector<float> &params)>;
+        using MeshFactory = std::function<gfx::MeshData(const MeshDesc &desc)>;
         // Called after every object exists, so scripts can look other objects up by name.
         using ScriptFactory = std::function<void(GameObject &object, const std::vector<float> &params)>;
 
-        // Registers the built-in "cube" (halfSize), "sphere" (radius) and "plane" (halfSize, uvScale) meshes.
+        // Registers the built-in "cube" (halfSize), "sphere" (radius), "plane" (halfSize, uvScale) and
+        // "model" (path via MeshDesc::path, params[0] = uniform scale; loaded with assimp) meshes.
         explicit SceneLoader(std::shared_ptr<gfx::Shader> shader);
 
         void RegisterMesh(const std::string &kind, MeshFactory factory) { m_meshes[kind] = std::move(factory); }

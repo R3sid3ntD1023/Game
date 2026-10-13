@@ -24,12 +24,14 @@ find_package(glm CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(EnTT CONFIG REQUIRED)
 find_package(cereal CONFIG REQUIRED)
+find_package(assimp CONFIG REQUIRED)
 find_path(STB_INCLUDE_DIRS "stb_image.h")
 
 file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/*.cpp)
 add_executable(Game ${GAME_SOURCES})
 
 target_include_directories(Game PRIVATE src ${STB_INCLUDE_DIRS})
+target_precompile_headers(Game PRIVATE ${CMAKE_SOURCE_DIR}/src/pch.h)
 target_compile_definitions(Game PRIVATE
     SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders/"
     ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets/"
@@ -42,6 +44,7 @@ target_link_libraries(Game PRIVATE
     spdlog::spdlog
     EnTT::EnTT
     cereal::cereal
+    assimp::assimp
 )
 
 set_target_properties(Game PROPERTIES

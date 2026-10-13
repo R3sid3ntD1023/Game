@@ -5,6 +5,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <memory>
+#include <vector>
 
 struct Transform {
     glm::vec3 position{ 0.0f };
@@ -19,4 +20,9 @@ struct Transform {
 struct MeshRenderer {
     gfx::MeshHandle mesh = 0;
     std::shared_ptr<gfx::Material> material;
+};
+
+// Final skinning matrices (global * inverseBind) written by Animator and consumed by RenderSystem.
+struct SkinnedPose {
+    std::vector<glm::mat4> matrices;
 };

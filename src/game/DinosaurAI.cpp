@@ -13,6 +13,7 @@ namespace game
         m_body = gameObject->GetComponent<eng::RigidBody>();
         m_health = gameObject->GetComponent<eng::Health>();
         m_targetHealth = m_target.GetComponent<eng::Health>();
+        m_animator = gameObject->GetComponent<eng::Animator>();
     }
 
     void DinosaurAI::OnUpdate(float dt)
@@ -68,6 +69,12 @@ namespace game
 
         m_body->velocity.x = dir.x * speed;
         m_body->velocity.z = dir.z * speed;
+        if (m_animator)
+        {
+            const float blend = m_speed > 0.0f ? speed / m_speed : 0.0f;
+            m_animator->blend = blend;
+            m_animator->speed = 0.7f + 1.3f * blend;
+        }
         // Mesh long axis is local +X; rotating about Y by theta maps it to (cos t, 0, -sin t).
         if (glm::dot(dir, dir) > 0.0f)
             self.rotation = glm::angleAxis(std::atan2(-dir.z, dir.x), glm::vec3(0, 1, 0));
