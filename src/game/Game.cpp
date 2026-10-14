@@ -1,8 +1,10 @@
 #include <glad/glad.h>
 
-#include "game/Game.h"
 #include "eng/Animator.h"
+#include "eng/AudioSource.h"
 #include "eng/BuiltinComponents.h"
+#include "eng/Lighting.h"
+#include "eng/ParticleEmitter.h"
 #include "eng/RigidBody.h"
 #include "eng/Scene.h"
 #include "eng/SceneLoader.h"
@@ -10,11 +12,14 @@
 #include "game/DinosaurAI.h"
 #include "game/EscapeZone.h"
 #include "game/FirstPersonController.h"
+#include "game/Game.h"
 #include "game/Interaction.h"
 #include "game/IslandScene.h"
 #include "game/RaptorModel.h"
 #include "game/Terrain.h"
+#include "game/TreeGen.h"
 #include "game/Weapon.h"
+#include "gfx/ModelLoader.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <filesystem>
@@ -28,10 +33,6 @@ namespace game
     namespace
     {
 
-        constexpr int kTrees = 140;
-        constexpr int kRocks = 40;
-        constexpr int kRaptors = 14;
-
         float Param(const std::vector<float> &p, size_t i, float fallback) { return i < p.size() ? p[i] : fallback; }
 
     } // namespace
@@ -40,6 +41,7 @@ namespace game
         : m_window(1280, 720, "Escape the Island"),
           m_post(m_window.FramebufferSize().x, m_window.FramebufferSize().y)
     {
+        m_audio = std::make_unique<audio::AudioEngine>();
         m_hud = std::make_unique<Hud>(m_canvas.Root());
 
         MenuCallbacks callbacks;
@@ -66,6 +68,7 @@ namespace game
         m_window.GetInput().SetReceiver(playing ? m_receiver : nullptr);
 
         m_menus->ShowMain(screen == Screen::Menu);
+        m_audio->SetMasterVolume(screen == Screen::Playing ? 1.0f : 0.2f);
         m_menus->ShowPause(screen == Screen::Paused);
         m_hud->SetVisible(screen != Screen::Menu && m_world != nullptr);
     }
@@ -92,6 +95,7 @@ namespace game
         try
         {
             m_world = std::make_unique<eng::World>();
+            m_world->audio = m_audio.get();
             BuildWorld(world, regenerate);
         }
         catch (const std::exception &e)
@@ -109,7 +113,7 @@ namespace game
 
     void Game::BuildWorld(const std::string &worldName, bool regenerate)
     {
-        const std::string path = std::string(ASSETS_DIR) + "worlds/" + worldName + ".world";
+        const std::string path = std::string(ASSETS_DIR) + "worlds/" + worldName + eng::kSceneExtension;
 
         eng::SceneData scene;
         bool loaded = false;
@@ -127,7 +131,7 @@ namespace game
         }
         if (!loaded)
         {
-            scene = worldName == "test" ? MakeTestScene() : MakeIslandScene(kTrees, kRocks, kRaptors);
+            scene = worldName == "test" ? MakeTestScene() : MakeIslandScene();
             eng::SaveScene(path, scene);
             spdlog::info("Generated world '{}' -> {}", worldName, path);
         }
@@ -136,9 +140,36 @@ namespace game
         eng::SceneLoader loader(shader);
 
         loader.RegisterMesh(kMeshTerrain, [](const eng::MeshDesc &d)
-                            { return Terrain::BuildMesh(static_cast<int>(Param(d.params, 0, 160.0f))); });
-        loader.RegisterMesh(kMeshRaptor, [](const eng::MeshDesc &)
-                            { return RaptorMesh(); });
+                            { return Terrain::BuildMesh(static_cast<int>(Param(d.params, 0, 160.0f))); }, false);
+        // assets/models/raptor.* (rigged, faces +X, origin at the hit-box center) replaces the procedural raptor.
+        std::shared_ptr<gfx::SkinnedModel> raptorModel;
+        std::shared_ptr<const gfx::Skeleton> raptorSkeleton;
+        std::shared_ptr<const std::vector<gfx::AnimationClip>> raptorClips;
+        if (const std::string external = gfx::FindModelOverride("raptor"); !external.empty())
+        {
+            try
+            {
+                raptorModel = std::make_shared<gfx::SkinnedModel>(gfx::LoadSkinnedModel(external));
+                raptorSkeleton = std::shared_ptr<const gfx::Skeleton>(raptorModel, &raptorModel->skeleton);
+                raptorClips = std::make_shared<const std::vector<gfx::AnimationClip>>(raptorModel->clips);
+                spdlog::info("Raptor model loaded from {}", external);
+            }
+            catch (const std::exception &e)
+            {
+                spdlog::warn("Raptor model override ignored: {}", e.what());
+                raptorModel.reset();
+            }
+        }
+        loader.RegisterMesh(
+            kMeshRaptor, [raptorModel](const eng::MeshDesc &)
+            { return raptorModel ? raptorModel->mesh : RaptorMesh(); },
+            false);
+        loader.RegisterMesh(kMeshTreeTrunk, [](const eng::MeshDesc &d)
+                            { return GenerateRainforestTree(static_cast<uint32_t>(Param(d.params, 0, 100.0f))).trunk; });
+        loader.RegisterMesh(kMeshTreeCanopy, [](const eng::MeshDesc &d)
+                            { return GenerateRainforestTree(static_cast<uint32_t>(Param(d.params, 0, 100.0f))).canopy; });
+        loader.RegisterMesh(kMeshFern, [](const eng::MeshDesc &d)
+                            { return GenerateFern(static_cast<uint32_t>(Param(d.params, 0, 200.0f))); });
 
         loader.RegisterScript(kScriptPlayer, [this](eng::GameObject &go, const std::vector<float> &p)
                               {
@@ -148,14 +179,26 @@ namespace game
             fps.SetLook(Param(p, 0, 0.0f), Param(p, 1, 0.0f));
             scripts.Add<InteractionScript>(m_state);
             m_receiver = &scripts;
-            m_player = &go; });
+            m_player = &go;
 
-        loader.RegisterScript(kScriptDinosaur, [this](eng::GameObject &go, const std::vector<float> &p)
+            // The flashlight is a spot light entity that follows the camera; F toggles it.
+            auto &flashlight = m_world->CreateGameObject("Flashlight");
+            flashlight.AddComponent<eng::SpotLightComponent>(glm::vec3(1.0f, 0.95f, 0.85f), 220.0f, 50.0f, 11.0f, 21.0f);
+            flashlight.AddComponent<eng::CameraFollower>(glm::vec3(0.15f, -0.12f, 0.3f)); });
+
+        loader.RegisterScript(kScriptDinosaur, [this, raptorModel, raptorSkeleton, raptorClips](eng::GameObject &go, const std::vector<float> &p)
                               {
             eng::GameObject *player = m_world->Find("Player");
             if (!player)
                 throw std::runtime_error("Raptor needs a Player object");
-            go.AddComponent<eng::Animator>(RaptorSkeleton()).hook = RaptorPose;
+            if (raptorModel)
+            {
+                auto &animator = go.AddComponent<eng::Animator>(raptorSkeleton, raptorClips);
+                if (!raptorModel->clips.empty())
+                    animator.Play(raptorModel->clips.front().name);
+            }
+            else
+                go.AddComponent<eng::Animator>(RaptorSkeleton()).hook = RaptorPose;
             go.AddComponent<eng::ScriptComponent>().Add<DinosaurAI>(*player, m_state, Param(p, 0, 8.0f), Param(p, 1, 12.0f)); });
 
         loader.RegisterScript(kScriptEscape, [this](eng::GameObject &go, const std::vector<float> &p)
@@ -184,8 +227,36 @@ namespace game
         loader.RegisterScript(kScriptDoor, [](eng::GameObject &go, const std::vector<float> &p)
                               { go.AddComponent<Door>(go.name, glm::vec3(Param(p, 0, 0.0f), Param(p, 1, 0.0f), Param(p, 2, 0.0f)), Param(p, 3, 1.5f)); });
 
+        loader.RegisterScript(kScriptLightPost, [](eng::GameObject &go, const std::vector<float> &p)
+                              {
+            go.AddComponent<eng::PointLightComponent>(glm::vec3(Param(p, 4, 1.0f), Param(p, 5, 0.7f), Param(p, 6, 0.4f)),
+                                                      Param(p, 0, 120.0f), Param(p, 1, 28.0f));
+            go.AddComponent<eng::LightFlicker>(Param(p, 2, 0.5f), static_cast<uint32_t>(Param(p, 3, 1.0f))); });
+
+        // params: type (0 point, 1 spot, 2 directional), r, g, b, intensity, range, inner degrees, outer degrees
+        loader.RegisterScript(kScriptLight, [](eng::GameObject &go, const std::vector<float> &p)
+                              { go.AddComponent<eng::LightComponent>(static_cast<gfx::LightType>(static_cast<int>(Param(p, 0, 0.0f))),
+                                                                     glm::vec3(Param(p, 1, 1.0f), Param(p, 2, 1.0f), Param(p, 3, 1.0f)),
+                                                                     Param(p, 4, 10.0f), Param(p, 5, 20.0f), Param(p, 6, 12.0f), Param(p, 7, 22.0f)); });
+
+        // params: amount (0..1), wind x, wind z
+        loader.RegisterScript(kScriptRain, [](eng::GameObject &go, const std::vector<float> &p)
+                              {
+            auto &rain = go.AddComponent<eng::ParticleEmitter>(eng::EmitterType::Rain);
+            rain.amount = Param(p, 0, 1.0f);
+            rain.wind = glm::vec3(Param(p, 1, 2.5f), 0.0f, Param(p, 2, 1.0f));
+            go.AddComponent<eng::AudioSource>("rain_loop", true, 0.55f, false); });
+
+        // params: volume
+        loader.RegisterScript(kScriptWind, [](eng::GameObject &go, const std::vector<float> &p)
+                              { go.AddComponent<eng::AudioSource>("wind_loop", true, Param(p, 0, 0.4f), false); });
+
+        // params: rounds
+        loader.RegisterScript(kScriptAmmoCrate, [](eng::GameObject &go, const std::vector<float> &p)
+                              { go.AddComponent<AmmoCrate>(static_cast<int>(Param(p, 0, 24.0f))); });
+
         if (!m_environment)
-            m_environment = std::make_shared<gfx::EnvironmentMap>(ASSETS_DIR "hdr/sky.hdr");
+            m_environment = std::make_shared<gfx::EnvironmentMap>(""); // empty path = procedural night sky
         m_world->environment = m_environment;
         m_world->Physics().SetHeightField(&Terrain::Height);
         m_world->Physics().SetBoundsRadius(Terrain::kWalkRadius);
@@ -213,6 +284,7 @@ namespace game
             const float dt = std::min(static_cast<float>(now - last), 0.05f);
             last = now;
             m_window.PollEvents();
+            m_audio->Update();
 
             const bool esc = input.IsKeyDown(GLFW_KEY_ESCAPE);
             if (esc && !prevEsc)
@@ -263,8 +335,9 @@ namespace game
             if (m_world)
             {
                 m_post.Resize(size.x, size.y);
+                m_post.time = static_cast<float>(now);
                 m_post.BeginScene();
-                m_world->Render(static_cast<float>(size.x) / static_cast<float>(size.y));
+                m_world->Render(static_cast<float>(size.x) / static_cast<float>(size.y), m_post.DepthTexture(), size.x, size.y);
                 m_post.EndScene(size.x, size.y);
             }
             else

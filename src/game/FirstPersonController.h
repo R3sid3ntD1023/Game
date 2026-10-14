@@ -25,12 +25,15 @@ public:
 
 private:
     void Shoot();
+    void UpdateFootsteps(float dt);
 
     eng::RigidBody* m_body = nullptr;
     float m_yaw = 0.0f; // degrees; 0 looks down +X
     float m_pitch = 0.0f;
     bool m_forward = false, m_back = false, m_left = false, m_right = false, m_sprint = false, m_jump = false;
     bool m_fireHeld = false, m_firePressed = false, m_reloadPressed = false;
+    float m_stepDistance = 0.0f;
+    int m_lastStep = -1;
 };
 
 } // namespace game

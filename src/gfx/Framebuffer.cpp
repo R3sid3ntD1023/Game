@@ -26,9 +26,13 @@ namespace gfx
 
         if (m_withDepth)
         {
-            glCreateRenderbuffers(1, &m_depth);
-            glNamedRenderbufferStorage(m_depth, GL_DEPTH_COMPONENT32F, m_width, m_height);
-            glNamedFramebufferRenderbuffer(m_fbo, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_depth);
+            glCreateTextures(GL_TEXTURE_2D, 1, &m_depth); // a texture so Forward+ can read it
+            glTextureStorage2D(m_depth, 1, GL_DEPTH_COMPONENT32F, m_width, m_height);
+            glTextureParameteri(m_depth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTextureParameteri(m_depth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTextureParameteri(m_depth, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTextureParameteri(m_depth, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glNamedFramebufferTexture(m_fbo, GL_DEPTH_ATTACHMENT, m_depth, 0);
         }
 
         if (glCheckNamedFramebufferStatus(m_fbo, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
@@ -38,7 +42,7 @@ namespace gfx
     void Framebuffer::Destroy()
     {
         if (m_depth)
-            glDeleteRenderbuffers(1, &m_depth);
+            glDeleteTextures(1, &m_depth);
         if (m_color)
             glDeleteTextures(1, &m_color);
         if (m_fbo)

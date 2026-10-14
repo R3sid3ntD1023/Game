@@ -3,6 +3,7 @@
 #include "eng/GameObject.h"
 #include "eng/World.h"
 #include <algorithm>
+#include <cstdlib>
 
 namespace game
 {
@@ -29,17 +30,30 @@ namespace game
         if (m_ammo <= 0)
         {
             Reload();
+            if (!m_reloading)
+            {
+                if (auto *audio = gameObject->GetWorld().audio)
+                    audio->Play2D("dry_fire", 0.8f);
+                m_cooldown = 0.35f;
+            }
             return false;
         }
 
         --m_ammo;
         m_cooldown = m_stats.cooldown;
+        if (auto *audio = gameObject->GetWorld().audio)
+            audio->Play2D(m_stats.automatic ? "gunshot_rifle" : "gunshot_pistol", 0.9f, 0.95f + 0.1f * static_cast<float>(std::rand() % 100) / 100.0f);
 
         eng::RayHit hit;
         if (gameObject->GetWorld().Physics().Raycast(origin, direction, m_stats.range, ignore, hit) && hit.body)
         {
             if (auto *health = hit.body->gameObject->GetComponent<eng::Health>())
+            {
                 health->Damage(m_stats.damage);
+                gameObject->GetWorld().EmitBlood(hit.point, -direction, 24);
+                if (auto *audio = gameObject->GetWorld().audio)
+                    audio->PlayOneShot("flesh_hit", hit.point, 1.0f, 0.9f + 0.2f * static_cast<float>(std::rand() % 100) / 100.0f);
+            }
         }
         return true;
     }
@@ -50,6 +64,8 @@ namespace game
             return;
         m_reloading = true;
         m_reloadTimer = m_stats.reloadTime;
+        if (auto *audio = gameObject->GetWorld().audio)
+            audio->Play2D("reload", 0.8f);
     }
 
     void WeaponComponent::OnUpdate(float dt)

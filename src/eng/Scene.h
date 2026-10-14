@@ -1,5 +1,6 @@
 #pragma once
 #include "core/CerealGlm.h"
+#include <cereal/cereal.hpp>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -23,7 +24,13 @@ namespace eng
         std::string metalRoughMap;
 
         template <class Archive>
-        void serialize(Archive &ar) { ar(name, color, metallic, roughness, emissive, albedoMap, normalMap, metalRoughMap); }
+        void serialize(Archive &ar)
+        {
+            ar(cereal::make_nvp("name", name), cereal::make_nvp("color", color), cereal::make_nvp("metallic", metallic),
+               cereal::make_nvp("roughness", roughness), cereal::make_nvp("emissive", emissive),
+               cereal::make_nvp("albedoMap", albedoMap), cereal::make_nvp("normalMap", normalMap),
+               cereal::make_nvp("metalRoughMap", metalRoughMap));
+        }
     };
 
     // `kind` selects a registered mesh generator (cube, sphere, plane, ...); `params` are its arguments.
@@ -35,7 +42,11 @@ namespace eng
         std::string path; // kind "model": mesh file relative to the assets folder
 
         template <class Archive>
-        void serialize(Archive &ar) { ar(name, kind, params, path); }
+        void serialize(Archive &ar)
+        {
+            ar(cereal::make_nvp("name", name), cereal::make_nvp("kind", kind), cereal::make_nvp("params", params),
+               cereal::make_nvp("path", path));
+        }
     };
 
     struct ObjectDesc
@@ -56,14 +67,18 @@ namespace eng
         template <class Archive>
         void serialize(Archive &ar)
         {
-            ar(name, position, rotation, scale, mesh, material, hasBody, bodyStatic, halfExtents, health, script, scriptParams);
+            ar(cereal::make_nvp("name", name), cereal::make_nvp("position", position), cereal::make_nvp("rotation", rotation),
+               cereal::make_nvp("scale", scale), cereal::make_nvp("mesh", mesh), cereal::make_nvp("material", material),
+               cereal::make_nvp("hasBody", hasBody), cereal::make_nvp("bodyStatic", bodyStatic),
+               cereal::make_nvp("halfExtents", halfExtents), cereal::make_nvp("health", health),
+               cereal::make_nvp("script", script), cereal::make_nvp("scriptParams", scriptParams));
         }
     };
 
     struct SceneData
     {
         static constexpr uint32_t kMagic = 0x57444C47; // "GLDW"
-        static constexpr uint32_t kVersion = 2;
+        static constexpr uint32_t kVersion = 5;
 
         std::vector<MaterialDesc> materials;
         std::vector<MeshDesc> meshes;
@@ -86,8 +101,18 @@ namespace eng
         }
 
         template <class Archive>
-        void serialize(Archive &ar) { ar(materials, meshes, objects); }
+        void serialize(Archive &ar)
+        {
+            ar(cereal::make_nvp("materials", materials), cereal::make_nvp("meshes", meshes), cereal::make_nvp("objects", objects));
+        }
     };
+
+    // Debug and RelWithDebInfo builds write readable JSON; Release builds write compact binary (see CMakeLists.txt).
+#ifdef GAME_SCENE_JSON
+    inline constexpr const char *kSceneExtension = ".world.json";
+#else
+    inline constexpr const char *kSceneExtension = ".world";
+#endif
 
     // Throw std::runtime_error on I/O failure or a bad/foreign file.
     void SaveScene(const std::string &path, const SceneData &scene);

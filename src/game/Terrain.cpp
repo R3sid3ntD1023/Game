@@ -11,7 +11,7 @@ namespace game
         float t = std::clamp((1.0f - r) / 0.4f, 0.0f, 1.0f);
         t = t * t * (3.0f - 2.0f * t);
 
-        const float hills = 2.5f * std::sin(x * 0.07f) * std::cos(z * 0.06f) + 1.5f * std::sin(x * 0.13f + 1.3f) * std::sin(z * 0.11f) + 0.5f * std::sin(x * 0.31f) * std::sin(z * 0.27f);
+        const float hills = 2.5f * std::sin(x * 0.07f) * std::cos(z * 0.06f) + 1.5f * std::sin(x * 0.13f + 1.3f) * std::sin(z * 0.11f) + 0.5f * std::sin(x * 0.31f) * std::sin(z * 0.27f) + 5.0f * std::sin(x * 0.018f) * std::cos(z * 0.021f) + 3.0f * std::sin(x * 0.045f + 2.0f) * std::sin(z * 0.04f); // broad rolling terrain
         return -4.0f + (4.0f + 6.0f + hills) * t;
     }
 

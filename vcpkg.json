@@ -5,6 +5,7 @@
         "spdlog",
         "entt",
         "cereal",
+        "openal-soft",
         "assimp",
         "glfw3",
         "glm",

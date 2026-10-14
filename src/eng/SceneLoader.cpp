@@ -37,6 +37,15 @@ namespace eng
             auto it = m_meshes.find(d.kind);
             if (it == m_meshes.end())
                 throw std::runtime_error("Unknown mesh kind '" + d.kind + "' (mesh " + d.name + ")");
+            if (d.kind != "model" && !m_fixedMeshes.count(d.kind))
+            {
+                const std::string external = gfx::FindModelOverride(d.kind);
+                if (!external.empty())
+                {
+                    meshes.push_back(world.Meshes().Create(gfx::LoadModel(external)));
+                    continue;
+                }
+            }
             meshes.push_back(world.Meshes().Create(it->second(d)));
         }
 

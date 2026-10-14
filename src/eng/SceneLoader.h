@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace eng
@@ -26,7 +27,14 @@ namespace eng
         // "model" (path via MeshDesc::path, params[0] = uniform scale; loaded with assimp) meshes.
         explicit SceneLoader(std::shared_ptr<gfx::Shader> shader);
 
-        void RegisterMesh(const std::string &kind, MeshFactory factory) { m_meshes[kind] = std::move(factory); }
+        // Every kind is replaced by assets/models/<kind>.(glb|gltf|obj|fbx|dae) when that file exists, unless
+        // registered with overridable = false (the factory then handles overrides itself).
+        void RegisterMesh(const std::string &kind, MeshFactory factory, bool overridable = true)
+        {
+            m_meshes[kind] = std::move(factory);
+            if (!overridable)
+                m_fixedMeshes.insert(kind);
+        }
         void RegisterScript(const std::string &name, ScriptFactory factory) { m_scripts[name] = std::move(factory); }
 
         void Instantiate(World &world, const SceneData &scene) const;
@@ -34,6 +42,7 @@ namespace eng
     private:
         std::shared_ptr<gfx::Shader> m_shader;
         std::unordered_map<std::string, MeshFactory> m_meshes;
+        std::unordered_set<std::string> m_fixedMeshes;
         std::unordered_map<std::string, ScriptFactory> m_scripts;
     };
 

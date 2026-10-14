@@ -49,6 +49,16 @@ private:
     WeaponStats m_stats;
 };
 
+// Supply crate that tops up the equipped weapon's reserve ammo once.
+class AmmoCrate : public eng::Interactable {
+public:
+    explicit AmmoCrate(int rounds) : m_rounds(rounds) { prompt = "Take ammo"; }
+    void Interact(eng::GameObject& who) override;
+
+private:
+    int m_rounds;
+};
+
 // Slides its GameObject by `openOffset` when used. Doors slide sideways, gates lift; the
 // object's static RigidBody moves with it, so the opening becomes passable.
 class Door : public eng::Interactable {

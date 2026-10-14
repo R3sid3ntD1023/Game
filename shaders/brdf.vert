@@ -9,8 +9,9 @@ layout(location = 5) in vec4 aBoneWeights;
 
 struct Instance {
     mat4 model;
-    uint boneOffset; // 0xFFFFFFFF = not skinned
-    uint pad0, pad1, pad2;
+    uint boneOffset;       // 0xFFFFFFFF = not skinned
+    float emissiveScale;   // per-instance emissive multiplier (flickering lamps)
+    uint pad0, pad1;
 };
 
 layout(std430, binding = 0) readonly buffer Instances {
@@ -23,11 +24,15 @@ layout(std430, binding = 1) readonly buffer Bones {
 
 uniform mat4 uViewProj;
 
+invariant gl_Position; // must match depth.vert exactly so the shading pass can use GL_LEQUAL
+
 out VS_OUT {
     vec3 worldPos;
     vec2 uv;
     mat3 tbn;
 } vs;
+
+flat out float vEmissiveScale;
 
 void main() {
     // gl_InstanceID does not include baseInstance, so add it explicitly.
@@ -59,5 +64,6 @@ void main() {
     vs.worldPos = world.xyz;
     vs.uv = aUV;
     vs.tbn = mat3(T, B, N);
+    vEmissiveScale = inst.emissiveScale;
     gl_Position = uViewProj * world;
 }

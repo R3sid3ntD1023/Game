@@ -3,11 +3,23 @@
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 #include <cmath>
+#include <filesystem>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 
 namespace gfx
 {
+
+    std::string FindModelOverride(const std::string &name)
+    {
+        for (const char *ext : {".glb", ".gltf", ".obj", ".fbx", ".dae"})
+        {
+            const std::string path = std::string(ASSETS_DIR) + "models/" + name + ext;
+            if (std::filesystem::exists(path))
+                return path;
+        }
+        return {};
+    }
 
     MeshData LoadModel(const std::string &path, float scale)
     {

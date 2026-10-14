@@ -12,4 +12,7 @@ namespace gfx
     // Skinned model: bind-space mesh with bone ids/weights (max 4 per vertex), the node-hierarchy skeleton and animation clips.
     SkinnedModel LoadSkinnedModel(const std::string &path);
 
+    // Returns assets/models/<name>.(glb|gltf|obj|fbx|dae) if one exists, else an empty string.
+    std::string FindModelOverride(const std::string &name);
+
 } // namespace gfx

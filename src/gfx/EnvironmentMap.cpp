@@ -60,22 +60,71 @@ namespace gfx
             return px;
         }
 
+        // Moonlit night: dark gradient, scattered stars and a moon where brdf.frag puts its moonlight.
+        std::vector<float> ProceduralNightSky(int w, int h)
+        {
+            std::vector<float> px(static_cast<size_t>(w) * h * 4);
+            const glm::vec3 moonDir = glm::normalize(glm::vec3(-0.4f, 0.8f, 0.3f));
+            for (int y = 0; y < h; ++y)
+            {
+                const float elev = ((static_cast<float>(y) + 0.5f) / static_cast<float>(h) - 0.5f) * 3.14159265f;
+                for (int x = 0; x < w; ++x)
+                {
+                    const float phi = ((static_cast<float>(x) + 0.5f) / static_cast<float>(w) - 0.5f) * 6.2831853f;
+                    const glm::vec3 d(std::cos(elev) * std::cos(phi), std::sin(elev), std::cos(elev) * std::sin(phi));
+
+                    glm::vec3 c = d.y >= 0.0f ? glm::mix(glm::vec3(0.020f, 0.028f, 0.045f), glm::vec3(0.004f, 0.007f, 0.018f), std::sqrt(d.y))
+                                              : glm::vec3(0.002f, 0.003f, 0.005f);
+
+                    uint32_t hash = static_cast<uint32_t>(x) * 73856093u ^ static_cast<uint32_t>(y) * 19349663u;
+                    hash ^= hash >> 13;
+                    hash *= 0x5bd1e995u;
+                    hash ^= hash >> 15;
+                    if (d.y > 0.05f && (hash & 0xFFFFu) > 65400u)
+                    {
+                        const float b = 0.4f + 2.5f * static_cast<float>((hash >> 16) & 0xFFu) / 255.0f;
+                        c += glm::vec3(b * 0.9f, b * 0.95f, b);
+                    }
+
+                    const float md = std::max(glm::dot(d, moonDir), 0.0f);
+                    c += glm::vec3(6.0f, 6.5f, 8.0f) * glm::smoothstep(0.9988f, 0.9992f, md);
+                    c += glm::vec3(0.5f, 0.6f, 0.9f) * 0.12f * std::pow(md, 120.0f);
+
+                    float *p = &px[(static_cast<size_t>(y) * w + x) * 4];
+                    p[0] = c.r;
+                    p[1] = c.g;
+                    p[2] = c.b;
+                    p[3] = 1.0f;
+                }
+            }
+            return px;
+        }
+
     } // namespace
 
     GLuint EnvironmentMap::LoadEquirect(const std::string &path) const
     {
         int w = 0, h = 0, n = 0;
         stbi_set_flip_vertically_on_load(true); // row 0 = bottom, so v = 1 is up
-        float *data = stbi_loadf(path.c_str(), &w, &h, &n, 4);
+        float *data = path.empty() ? nullptr : stbi_loadf(path.c_str(), &w, &h, &n, 4);
 
         std::vector<float> fallback;
         const float *pixels = data;
         if (!data)
         {
-            spdlog::warn("Could not load HDR '{}' ({}); using procedural sky", path, stbi_failure_reason());
-            w = 256;
-            h = 128;
-            fallback = ProceduralSky(w, h);
+            if (path.empty())
+            {
+                w = 1024;
+                h = 512;
+                fallback = ProceduralNightSky(w, h);
+            }
+            else
+            {
+                spdlog::warn("Could not load HDR '{}' ({}); using procedural sky", path, stbi_failure_reason());
+                w = 256;
+                h = 128;
+                fallback = ProceduralSky(w, h);
+            }
             pixels = fallback.data();
         }
         else

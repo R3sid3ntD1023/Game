@@ -5,7 +5,9 @@
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <spdlog/spdlog.h>
+#include <string>
 
 namespace game
 {
@@ -42,6 +44,19 @@ namespace game
             if (action == GLFW_PRESS)
                 m_reloadPressed = true;
             break;
+        case GLFW_KEY_F:
+            if (action == GLFW_PRESS)
+            {
+                eng::World &world = gameObject->GetWorld();
+                if (eng::GameObject *flashlight = world.Find("Flashlight"))
+                    if (auto *light = world.Registry().try_get<Light>(flashlight->Entity()))
+                    {
+                        light->enabled = !light->enabled;
+                        if (world.audio)
+                            world.audio->Play2D("flashlight", 0.6f);
+                    }
+            }
+            break;
         default:
             break;
         }
@@ -65,6 +80,7 @@ namespace game
 
     void FirstPersonController::OnUpdate(float dt)
     {
+        UpdateFootsteps(dt);
         if (auto *weapon = gameObject->GetComponent<WeaponComponent>())
         {
             if (m_reloadPressed)
@@ -101,6 +117,30 @@ namespace game
 
         if (m_jump && m_body->grounded)
             m_body->velocity.y = jumpSpeed;
+    }
+
+    void FirstPersonController::UpdateFootsteps(float dt)
+    {
+        audio::AudioEngine *audio = gameObject->GetWorld().audio;
+        if (!audio || !m_body)
+            return;
+
+        const float speed = std::sqrt(m_body->velocity.x * m_body->velocity.x + m_body->velocity.z * m_body->velocity.z);
+        if (!m_body->grounded || speed < 1.0f)
+            return;
+
+        const float stride = m_sprint ? 2.6f : 2.0f;
+        m_stepDistance += speed * dt;
+        if (m_stepDistance < stride)
+            return;
+        m_stepDistance -= stride;
+
+        int variant;
+        do
+            variant = std::rand() % 4;
+        while (variant == m_lastStep);
+        m_lastStep = variant;
+        audio->Play2D("footstep_" + std::to_string(variant), m_sprint ? 0.9f : 0.6f, 0.9f + 0.2f * static_cast<float>(std::rand() % 100) / 100.0f);
     }
 
     void FirstPersonController::Shoot()

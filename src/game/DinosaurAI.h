@@ -29,6 +29,8 @@ private:
     float m_speed;
     float m_damage;
     float m_attackTimer = 0.0f;
+    float m_stepDistance = 0.0f;
+    bool m_chasing = false;
     float m_wanderTimer = 0.0f;
     glm::vec3 m_wanderDir{ 0.0f };
     float m_aggroRange = 35.0f;

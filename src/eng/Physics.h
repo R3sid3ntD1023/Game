@@ -23,6 +23,7 @@ namespace eng
         using HeightFn = std::function<float(float, float)>;
 
         void SetHeightField(HeightFn fn) { m_height = std::move(fn); }
+        float GroundHeight(float x, float z, float fallback) const { return m_height ? m_height(x, z) : fallback; }
         void SetBoundsRadius(float radius) { m_boundsRadius = radius; }
         void SetGravity(float g) { m_gravity = g; }
 

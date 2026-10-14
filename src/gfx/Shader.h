@@ -22,6 +22,7 @@ namespace gfx
         void SetFloat(const char *name, float v) const { glProgramUniform1f(m_program, Loc(name), v); }
         void SetVec2(const char *name, const glm::vec2 &v) const { glProgramUniform2fv(m_program, Loc(name), 1, &v[0]); }
         void SetVec3(const char *name, const glm::vec3 &v) const { glProgramUniform3fv(m_program, Loc(name), 1, &v[0]); }
+        void SetVec4Array(const char *name, const glm::vec4 *v, int count) const { glProgramUniform4fv(m_program, Loc(name), count, &v[0][0]); }
         void SetVec4(const char *name, const glm::vec4 &v) const { glProgramUniform4fv(m_program, Loc(name), 1, &v[0]); }
         void SetMat4(const char *name, const glm::mat4 &v) const { glProgramUniformMatrix4fv(m_program, Loc(name), 1, GL_FALSE, &v[0][0]); }
 

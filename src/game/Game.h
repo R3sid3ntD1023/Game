@@ -1,4 +1,5 @@
 #pragma once
+#include "audio/AudioEngine.h"
 #include "core/Window.h"
 #include "eng/World.h"
 #include "game/GameState.h"
@@ -29,6 +30,7 @@ private:
     core::Window m_window;
     ui::Canvas m_canvas;
     gfx::PostProcess m_post;
+    std::unique_ptr<audio::AudioEngine> m_audio; // declared before m_world so sources are released first
     std::unique_ptr<eng::World> m_world; // only exists while a world is loaded
     std::shared_ptr<gfx::EnvironmentMap> m_environment;
     GameState m_state;

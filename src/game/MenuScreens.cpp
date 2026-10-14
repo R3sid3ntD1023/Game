@@ -75,7 +75,7 @@ namespace game
 
         m_message = &MakeLabel(main, Anchor::Bottom, {0.0f, 70.0f}, {1100.0f, 26.0f}, 20.0f, {1.0f, 0.4f, 0.35f, 1.0f}, "");
         MakeLabel(main, Anchor::Bottom, {0.0f, 30.0f}, {1100.0f, 26.0f}, 18.0f, {0.6f, 0.65f, 0.7f, 1.0f},
-                  "WASD move | Shift sprint | Space jump | LMB fire | R reload | E interact | Esc pause");
+                  "WASD move | Shift sprint | Space jump | LMB fire | R reload | E interact | F flashlight | Esc pause");
 
         // Pause menu
         auto &pause = parent.Add<ui::Panel>();

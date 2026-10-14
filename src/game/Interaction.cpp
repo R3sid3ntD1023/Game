@@ -82,6 +82,8 @@ namespace game
         if (!health || health->current >= health->max)
             return;
         health->Heal(m_amount);
+        if (auto *audio = gameObject->GetWorld().audio)
+            audio->Play2D("heal", 0.8f);
         gameObject->Destroy();
     }
 
@@ -93,6 +95,19 @@ namespace game
         if (!weapon)
             return;
         weapon->Equip(m_stats);
+        if (auto *audio = gameObject->GetWorld().audio)
+            audio->Play2D("pickup", 0.8f);
+        gameObject->Destroy();
+    }
+
+    void AmmoCrate::Interact(eng::GameObject &who)
+    {
+        auto *weapon = who.GetComponent<WeaponComponent>();
+        if (!weapon || !weapon->Equipped())
+            return;
+        weapon->AddAmmo(m_rounds);
+        if (auto *audio = gameObject->GetWorld().audio)
+            audio->Play2D("pickup", 0.8f);
         gameObject->Destroy();
     }
 
@@ -104,7 +119,12 @@ namespace game
 
     std::string Door::Prompt() const { return (m_open ? "Close " : "Open ") + m_label; }
 
-    void Door::Interact(eng::GameObject &) { m_open = !m_open; }
+    void Door::Interact(eng::GameObject &)
+    {
+        m_open = !m_open;
+        if (auto *audio = gameObject->GetWorld().audio)
+            audio->PlayOneShot("door", gameObject->GetTransform().position, 1.0f, m_open ? 1.0f : 0.85f);
+    }
 
     void Door::OnStart() { m_closedPos = gameObject->GetTransform().position; }
 

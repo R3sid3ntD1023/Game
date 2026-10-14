@@ -24,6 +24,7 @@ find_package(glm CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(EnTT CONFIG REQUIRED)
 find_package(cereal CONFIG REQUIRED)
+find_package(OpenAL CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 find_path(STB_INCLUDE_DIRS "stb_image.h")
 
@@ -35,6 +36,8 @@ target_precompile_headers(Game PRIVATE ${CMAKE_SOURCE_DIR}/src/pch.h)
 target_compile_definitions(Game PRIVATE
     SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders/"
     ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets/"
+    # Readable JSON worlds while developing, compact binary worlds in Release.
+    $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:GAME_SCENE_JSON=1>
     $<$<CONFIG:Debug>:GAME_DEBUG=1>
 )
 target_link_libraries(Game PRIVATE
@@ -44,6 +47,7 @@ target_link_libraries(Game PRIVATE
     spdlog::spdlog
     EnTT::EnTT
     cereal::cereal
+    OpenAL::OpenAL
     assimp::assimp
 )
 

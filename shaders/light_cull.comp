@@ -1,0 +1,117 @@
+#version 460 core
+
+// Forward+ light culling: one 16x16 workgroup per screen tile.
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0) uniform sampler2D uDepth;
+
+struct Light {
+    vec4 positionRange;  // xyz position, w range
+    vec4 colorType;      // rgb radiance, w type (0 point, 1 spot, 2 directional)
+    vec4 directionInner; // xyz direction, w cos(inner)
+    vec4 outer;          // x cos(outer)
+};
+
+layout(std430, binding = 3) readonly buffer Lights { Light lights[]; };
+layout(std430, binding = 4) writeonly buffer TileCounts { uint tileCounts[]; };
+layout(std430, binding = 5) writeonly buffer TileIndices { uint tileIndices[]; };
+
+uniform mat4 uView;
+uniform mat4 uProj;
+uniform vec2 uScreen;
+uniform vec2 uTiles;
+uniform int uLightCount;
+
+const uint MAX_PER_TILE = 64u;
+
+shared uint sMinDepth;
+shared uint sMaxDepth;
+shared uint sCount;
+shared uint sIndices[MAX_PER_TILE];
+
+// Positive distance along the view axis for a depth-buffer value.
+float LinearDepth(float d) {
+    float ndc = d * 2.0 - 1.0;
+    return uProj[3][2] / (ndc + uProj[2][2]);
+}
+
+vec3 CornerDir(vec2 ndc) {
+    return vec3(ndc.x / uProj[0][0], ndc.y / uProj[1][1], -1.0);
+}
+
+// Inward-facing plane normal (through the eye) containing rays a and b.
+vec3 SidePlane(vec3 a, vec3 b, vec3 centerDir) {
+    vec3 n = normalize(cross(a, b));
+    return dot(n, centerDir) < 0.0 ? -n : n;
+}
+
+void main() {
+    ivec2 tile = ivec2(gl_WorkGroupID.xy);
+    uint thread = gl_LocalInvocationIndex;
+
+    if (thread == 0u) {
+        sMinDepth = 0xFFFFFFFFu;
+        sMaxDepth = 0u;
+        sCount = 0u;
+    }
+    barrier();
+
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    if (px.x < int(uScreen.x) && px.y < int(uScreen.y)) {
+        float d = texelFetch(uDepth, px, 0).r;
+        if (d < 1.0) { // skip sky
+            uint ld = floatBitsToUint(LinearDepth(d)); // positive floats order like uints
+            atomicMin(sMinDepth, ld);
+            atomicMax(sMaxDepth, ld);
+        }
+    }
+    barrier();
+
+    bool hasGeometry = sMaxDepth != 0u;
+    float minD = uintBitsToFloat(sMinDepth);
+    float maxD = uintBitsToFloat(sMaxDepth);
+
+    vec2 n0 = vec2(tile * 16) / uScreen * 2.0 - 1.0;
+    vec2 n1 = vec2((tile + 1) * 16) / uScreen * 2.0 - 1.0;
+    vec3 c00 = CornerDir(vec2(n0.x, n0.y));
+    vec3 c10 = CornerDir(vec2(n1.x, n0.y));
+    vec3 c01 = CornerDir(vec2(n0.x, n1.y));
+    vec3 c11 = CornerDir(vec2(n1.x, n1.y));
+    vec3 centerDir = CornerDir((n0 + n1) * 0.5);
+
+    vec3 planes[4];
+    planes[0] = SidePlane(c00, c01, centerDir); // left
+    planes[1] = SidePlane(c10, c11, centerDir); // right
+    planes[2] = SidePlane(c00, c10, centerDir); // bottom
+    planes[3] = SidePlane(c01, c11, centerDir); // top
+
+    for (uint i = thread; i < uint(uLightCount); i += 256u) {
+        Light light = lights[i];
+        bool visible = true;
+
+        if (int(light.colorType.w + 0.5) != 2) { // directional lights reach every tile
+            vec3 center = (uView * vec4(light.positionRange.xyz, 1.0)).xyz;
+            float radius = light.positionRange.w;
+
+            visible = hasGeometry;
+            for (int p = 0; p < 4 && visible; ++p)
+                if (dot(planes[p], center) < -radius) visible = false;
+            if (visible) {
+                float depth = -center.z;
+                if (depth + radius < minD || depth - radius > maxD) visible = false;
+            }
+        }
+
+        if (visible) {
+            uint slot = atomicAdd(sCount, 1u);
+            if (slot < MAX_PER_TILE) sIndices[slot] = i;
+        }
+    }
+    barrier();
+
+    uint tileIndex = uint(tile.y) * uint(uTiles.x) + uint(tile.x);
+    uint count = min(sCount, MAX_PER_TILE);
+    if (thread == 0u) tileCounts[tileIndex] = count;
+    for (uint i = thread; i < count; i += 256u)
+        tileIndices[tileIndex * MAX_PER_TILE + i] = sIndices[i];
+}

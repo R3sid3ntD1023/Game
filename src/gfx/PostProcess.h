@@ -14,13 +14,17 @@ public:
     void Resize(int width, int height);
     void BeginScene();
     void EndScene(int screenWidth, int screenHeight);
+    GLuint DepthTexture() const { return m_scene.DepthTexture(); } // scene depth, valid after the depth prepass
 
     bool bloomEnabled = true;
     bool showRaw = false; // blit the HDR buffer directly, no tone mapping
-    float threshold = 1.0f;
-    float intensity = 0.5f;
+    float threshold = 1.5f;
+    float intensity = 0.15f;
     float radius = 0.005f;
-    float exposure = 1.0f;
+    float exposure = 1.6f;
+    float vignette = 0.6f;
+    float grain = 0.035f;
+    float time = 0.0f; // seconds; drives film grain
 
 private:
     Framebuffer m_scene;

@@ -23,6 +23,7 @@ namespace gfx
         void BlitTo(const Framebuffer &dst, bool includeDepth = false) const;
         void BlitToScreen(int screenWidth, int screenHeight) const;
 
+        GLuint DepthTexture() const { return m_depth; }
         GLuint ColorTexture() const { return m_color; }
         int Width() const { return m_width; }
         int Height() const { return m_height; }

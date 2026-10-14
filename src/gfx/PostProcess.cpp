@@ -18,7 +18,7 @@ namespace gfx
         m_scene.Bind();
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
-        m_scene.Clear({0.30f, 0.45f, 0.65f, 1.0f}); // matches SKY_COLOR in brdf.frag
+        m_scene.Clear({0.005f, 0.008f, 0.015f, 1.0f});
     }
 
     void PostProcess::EndScene(int screenWidth, int screenHeight)
@@ -39,6 +39,9 @@ namespace gfx
         m_composite.Bind();
         m_composite.SetFloat("uBloomIntensity", bloomEnabled ? intensity : 0.0f);
         m_composite.SetFloat("uExposure", exposure);
+        m_composite.SetFloat("uVignette", vignette);
+        m_composite.SetFloat("uGrain", grain);
+        m_composite.SetFloat("uTime", time);
         glBindTextureUnit(0, m_scene.ColorTexture());
         glBindTextureUnit(1, bloomTex);
         m_vao.Bind();

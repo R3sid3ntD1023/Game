@@ -27,6 +27,7 @@ namespace game
         // Returns true if a shot was fired. `ignore` is the shooter's own body.
         bool Fire(const glm::vec3 &origin, const glm::vec3 &direction, const eng::RigidBody *ignore);
         void Reload();
+        void AddAmmo(int rounds) { m_reserve += rounds; }
 
         void OnUpdate(float dt) override;
 
