@@ -392,12 +392,12 @@
                 "path": ""
             },
             {
-                "name": "sphere",
-                "kind": "sphere",
+                "name": "boulder",
+                "kind": "model",
                 "params": [
                     0.5
                 ],
-                "path": ""
+                "path": "models/forest_boulder_wgosajs_low.glb"
             },
             {
                 "name": "terrain",

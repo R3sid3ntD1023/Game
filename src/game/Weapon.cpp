@@ -7,20 +7,26 @@
 
 namespace game
 {
-
-    void WeaponComponent::Equip(const WeaponStats &stats)
+    void WeaponComponent::AddWeapon(const WeaponStats &stats)
     {
-        if (m_equipped && m_stats.name == stats.name)
+        if (m_equipped && m_currentStats.name == stats.name)
         {
             m_reserve += stats.magSize + stats.reserve; // picking up the same weapon again gives ammo
             return;
         }
-        m_stats = stats;
+        m_selectedWeapon = static_cast<int>(m_stats.size()); // set to the index of the new weapon being added
+        m_stats.emplace_back(stats);
+        Equip(stats);
+    }
+
+    void WeaponComponent::Equip(const WeaponStats &stats)
+    {
         m_equipped = true;
         m_reloading = false;
         m_ammo = stats.magSize;
         m_reserve = stats.reserve;
         m_cooldown = 0.0f;
+        m_currentStats = stats;
     }
 
     bool WeaponComponent::Fire(const glm::vec3 &origin, const glm::vec3 &direction, const eng::RigidBody *ignore)
@@ -40,16 +46,16 @@ namespace game
         }
 
         --m_ammo;
-        m_cooldown = m_stats.cooldown;
+        m_cooldown = m_currentStats.cooldown;
         if (auto *audio = gameObject->GetWorld().audio)
-            audio->Play2D(m_stats.automatic ? "gunshot_rifle" : "gunshot_pistol", 0.9f, 0.95f + 0.1f * static_cast<float>(std::rand() % 100) / 100.0f);
+            audio->Play2D(m_currentStats.automatic ? "gunshot_rifle" : "gunshot_pistol", 0.9f, 0.95f + 0.1f * static_cast<float>(std::rand() % 100) / 100.0f);
 
         eng::RayHit hit;
-        if (gameObject->GetWorld().Physics().Raycast(origin, direction, m_stats.range, ignore, hit) && hit.body)
+        if (gameObject->GetWorld().Physics().Raycast(origin, direction, m_currentStats.range, ignore, hit) && hit.body)
         {
             if (auto *health = hit.body->gameObject->GetComponent<eng::Health>())
             {
-                health->Damage(m_stats.damage);
+                health->Damage(m_currentStats.damage);
                 gameObject->GetWorld().EmitBlood(hit.point, -direction, 24);
                 if (auto *audio = gameObject->GetWorld().audio)
                     audio->PlayOneShot("flesh_hit", hit.point, 1.0f, 0.9f + 0.2f * static_cast<float>(std::rand() % 100) / 100.0f);
@@ -60,10 +66,10 @@ namespace game
 
     void WeaponComponent::Reload()
     {
-        if (!m_equipped || m_reloading || m_ammo >= m_stats.magSize || m_reserve <= 0)
+        if (!m_equipped || m_reloading || m_ammo >= m_currentStats.magSize || m_reserve <= 0)
             return;
         m_reloading = true;
-        m_reloadTimer = m_stats.reloadTime;
+        m_reloadTimer = m_currentStats.reloadTime;
         if (auto *audio = gameObject->GetWorld().audio)
             audio->Play2D("reload", 0.8f);
     }
@@ -77,11 +83,23 @@ namespace game
         m_reloadTimer -= dt;
         if (m_reloadTimer <= 0.0f)
         {
-            const int take = std::min(m_stats.magSize - m_ammo, m_reserve);
+            const int take = std::min(m_currentStats.magSize - m_ammo, m_reserve);
             m_ammo += take;
             m_reserve -= take;
             m_reloading = false;
         }
+    }
+
+    void WeaponComponent::SelectWeapon(int offset)
+    {
+        if (m_stats.empty())
+            return;
+
+        m_selectedWeapon = (m_selectedWeapon + offset) % static_cast<int>(m_stats.size());
+        if (m_selectedWeapon < 0)
+            m_selectedWeapon = static_cast<int>(m_stats.size()) - 1;
+
+        Equip(m_stats[m_selectedWeapon]);
     }
 
 } // namespace game

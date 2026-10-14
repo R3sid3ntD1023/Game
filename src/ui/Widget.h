@@ -1,5 +1,6 @@
 #pragma once
 #include "ui/Renderer.h"
+#include "ui/WidgetBinding.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -54,6 +55,7 @@ namespace ui
         virtual void OnHover(bool) {}
         virtual void OnPress(bool) {}
         virtual void OnClick() {}
+        virtual void OnMouseMoved(const glm::vec2 &) {}
 
         void Stretch() { stretchX = stretchY = true; }
         const Rect &GetRect() const { return m_rect; }
@@ -152,6 +154,28 @@ namespace ui
 
     private:
         bool m_hover = false;
+    };
+
+    class Slider : public Widget
+    {
+    public:
+        void Draw(Renderer &r) override;
+        bool Interactive() const override { return true; }
+        void OnHover(bool h) override { m_hover = h; }
+        void OnPress(bool p) override
+        {
+            m_pressed = p;
+        }
+        void OnMouseMoved(const glm::vec2 &mousePos) override;
+
+        std::string text;
+        float textSize = 20.0f;
+        WidgetBinding<float> binding;
+
+    private:
+        bool m_hover = false;
+        bool m_pressed = false;
+        float knobSize = 16.0f * m_scale;
     };
 
     // Lays children out top to bottom, centered horizontally, `spacing` apart. Children use their own `size`.

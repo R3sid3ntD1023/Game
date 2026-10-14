@@ -171,12 +171,14 @@ namespace ui
     glm::vec2 Renderer::MeasureText(const std::string &text, float size) const
     {
         float pen = 0.0f;
+        float h = 0.0f;
         for (const unsigned char ch : text)
         {
             const int index = (ch >= kFirstChar && ch < kFirstChar + kCharCount) ? ch - kFirstChar : '?' - kFirstChar;
             pen += m_glyphs[index].advance;
+            h = std::max(h, m_glyphs[index].h);
         }
-        return {pen * size / kBakePx, size};
+        return {pen * size / kBakePx, h * size / kBakePx};
     }
 
 } // namespace ui

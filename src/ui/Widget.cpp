@@ -166,4 +166,34 @@ namespace ui
         }
     }
 
+    void Slider::Draw(Renderer &r)
+    {
+        ui::Color knobColor = m_hover && m_pressed ? Color(0.4f, 0.9f, 0.5f, 1.0f) : Color(0.3f, 0.7f, 0.4f, 1.0f);
+
+        const float s = textSize * m_scale;
+        const auto extent = r.MeasureText(text, s);
+        r.Text(text, {m_rect.pos.x, m_rect.pos.y + extent.y * 0.5f}, s, {1.0f, 1.0f, 1.0f, 1.0f});
+
+        const float trackHeight = 4.0f * m_scale;
+        const float offsetX = extent.x + 12.0f * m_scale;
+        const Rect trackRect{{m_rect.pos.x + offsetX, m_rect.pos.y + (m_rect.size.y - trackHeight) * 0.5f}, {m_rect.size.x - offsetX, trackHeight}};
+        r.FillRect(trackRect, {0.0f, 0.0f, 0.0f, 0.6f});
+        const float knobPos = m_rect.pos.x + offsetX + *binding * (m_rect.size.x - offsetX - knobSize);
+        const Rect knobRect{{knobPos, m_rect.pos.y + (m_rect.size.y - knobSize) * 0.5f}, {knobSize, knobSize}};
+        r.FillRect(knobRect, knobColor);
+        DrawChildren(r);
+    }
+
+    void Slider::OnMouseMoved(const glm::vec2 &mousePos)
+    {
+        if (m_hover && m_pressed)
+        {
+            float value = (mousePos.x - m_rect.pos.x - knobSize * 0.5f) / (m_rect.size.x - knobSize);
+            value = glm::clamp(value, 0.0f, 1.0f);
+
+            if (binding)
+                *binding = value;
+        }
+    }
+
 } // namespace ui

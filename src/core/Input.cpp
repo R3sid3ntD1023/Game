@@ -40,4 +40,10 @@ namespace core
             m_receiver->OnMouseButton(button, action);
     }
 
+    void Input::HandleMouseScroll(float offset)
+    {
+        if (m_receiver)
+            m_receiver->OnMouseScroll(offset);
+    }
+
 } // namespace core

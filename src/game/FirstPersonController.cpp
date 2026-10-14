@@ -78,6 +78,11 @@ namespace game
         }
     }
 
+    void FirstPersonController::OnMouseScroll(float offset)
+    {
+        gameObject->GetComponent<WeaponComponent>()->SelectWeapon((offset > 0 ? 1 : -1));
+    }
+
     void FirstPersonController::OnUpdate(float dt)
     {
         UpdateFootsteps(dt);

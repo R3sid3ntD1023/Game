@@ -94,7 +94,8 @@ namespace game
         auto *weapon = who.GetComponent<WeaponComponent>();
         if (!weapon)
             return;
-        weapon->Equip(m_stats);
+
+        weapon->AddWeapon(m_stats);
         if (auto *audio = gameObject->GetWorld().audio)
             audio->Play2D("pickup", 0.8f);
         gameObject->Destroy();

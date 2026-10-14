@@ -53,6 +53,7 @@ namespace game
         { ReturnToMenu(); };
         callbacks.quit = [this]
         { m_window.SetShouldClose(); };
+
         m_menus = std::make_unique<MenuScreens>(m_canvas.Root(), std::move(callbacks), m_post);
 
         SetScreen(Screen::Menu);
@@ -62,13 +63,15 @@ namespace game
 
     void Game::SetScreen(Screen screen)
     {
+        float masterVolume = m_menus->MasterVolume();
+
         m_screen = screen;
         const bool playing = screen == Screen::Playing && m_world && m_state.status == Status::Playing;
         m_window.SetCursorCaptured(playing);
         m_window.GetInput().SetReceiver(playing ? m_receiver : nullptr);
 
         m_menus->ShowMain(screen == Screen::Menu);
-        m_audio->SetMasterVolume(screen == Screen::Playing ? 1.0f : 0.2f);
+        m_audio->SetMasterVolume(screen == Screen::Playing ? masterVolume : masterVolume * 0.1f);
         m_menus->ShowPause(screen == Screen::Paused);
         m_hud->SetVisible(screen != Screen::Menu && m_world != nullptr);
     }
@@ -174,6 +177,7 @@ namespace game
         loader.RegisterScript(kScriptPlayer, [this](eng::GameObject &go, const std::vector<float> &p)
                               {
             go.AddComponent<WeaponComponent>();
+
             auto &scripts = go.AddComponent<eng::ScriptComponent>();
             auto &fps = scripts.Add<FirstPersonController>();
             fps.SetLook(Param(p, 0, 0.0f), Param(p, 1, 0.0f));

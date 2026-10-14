@@ -12,6 +12,7 @@ namespace core
         virtual void OnKey(int /*key*/, int /*action*/) {}
         virtual void OnMouseMove(float /*dx*/, float /*dy*/) {}
         virtual void OnMouseButton(int /*button*/, int /*action*/) {}
+        virtual void OnMouseScroll(float /*offset*/) {}
     };
 
     class Input
@@ -26,6 +27,7 @@ namespace core
         void HandleKey(int key, int action);
         void HandleMouseMove(double x, double y);
         void HandleMouseButton(int button, int action);
+        void HandleMouseScroll(float offset);
         void ResetMouse() { m_firstMouse = true; }
 
     private:

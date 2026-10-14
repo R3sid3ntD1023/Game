@@ -35,8 +35,10 @@ namespace ui
             if (pressed == hit)
                 pressed->OnClick();
         }
-        m_prevDown = mouseDown;
 
+        m_prevDown = mouseDown;
+        if (m_active)
+            m_active->OnMouseMoved(mouse);
         m_renderer.Begin(screen);
         m_root.Draw(m_renderer);
         m_renderer.End();

@@ -29,6 +29,15 @@ namespace game
             return l;
         }
 
+        ui::Slider &MakeSlider(ui::Widget &parent, const char *text, const ui::WidgetBinding<float> &binding)
+        {
+            auto &s = parent.Add<ui::Slider>();
+            s.size = {360.0f, 32.0f};
+            s.text = text;
+            s.binding = binding;
+            return s;
+        }
+
     } // namespace
 
     MenuScreens::MenuScreens(ui::Widget &parent, MenuCallbacks cb, gfx::PostProcess &post)
@@ -72,6 +81,8 @@ namespace game
 
         MakeButton(stack, "Quit", [quit = cb.quit]
                    { if (quit) quit(); });
+
+        m_volume = &MakeSlider(stack, "Volume", ui::WidgetBinding<float>{&m_masterVolume});
 
         m_message = &MakeLabel(main, Anchor::Bottom, {0.0f, 70.0f}, {1100.0f, 26.0f}, 20.0f, {1.0f, 0.4f, 0.35f, 1.0f}, "");
         MakeLabel(main, Anchor::Bottom, {0.0f, 30.0f}, {1100.0f, 26.0f}, 18.0f, {0.6f, 0.65f, 0.7f, 1.0f},

@@ -23,7 +23,12 @@ namespace game
     class WeaponComponent : public eng::Component
     {
     public:
+        void AddWeapon(const WeaponStats &stats);
+
         void Equip(const WeaponStats &stats);
+
+        void SelectWeapon(int offset);
+
         // Returns true if a shot was fired. `ignore` is the shooter's own body.
         bool Fire(const glm::vec3 &origin, const glm::vec3 &direction, const eng::RigidBody *ignore);
         void Reload();
@@ -33,19 +38,21 @@ namespace game
 
         bool Equipped() const { return m_equipped; }
         bool Reloading() const { return m_reloading; }
-        float ReloadProgress() const { return m_reloading && m_stats.reloadTime > 0.0f ? 1.0f - m_reloadTimer / m_stats.reloadTime : 1.0f; }
+        float ReloadProgress() const { return m_reloading && m_currentStats.reloadTime > 0.0f ? 1.0f - m_reloadTimer / m_currentStats.reloadTime : 1.0f; }
         int Ammo() const { return m_ammo; }
         int Reserve() const { return m_reserve; }
-        const WeaponStats &Stats() const { return m_stats; }
+        const WeaponStats &Stats() const { return m_currentStats; }
 
     private:
-        WeaponStats m_stats;
+        std::vector<WeaponStats> m_stats;
         bool m_equipped = false;
         bool m_reloading = false;
         int m_ammo = 0;
         int m_reserve = 0;
         float m_cooldown = 0.0f;
         float m_reloadTimer = 0.0f;
+        WeaponStats m_currentStats;
+        int m_selectedWeapon = 0;
     };
 
 } // namespace game

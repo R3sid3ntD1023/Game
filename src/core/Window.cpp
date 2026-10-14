@@ -58,6 +58,9 @@ namespace core
                                  { InputOf(w).HandleMouseMove(x, y); });
         glfwSetMouseButtonCallback(m_window, [](GLFWwindow *w, int b, int a, int)
                                    { InputOf(w).HandleMouseButton(b, a); });
+
+        glfwSetScrollCallback(m_window, [](GLFWwindow *w, double xoffset, double yoffset)
+                              { InputOf(w).HandleMouseScroll(static_cast<float>(yoffset)); });
     }
 
     Window::~Window()

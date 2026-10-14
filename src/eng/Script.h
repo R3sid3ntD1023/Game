@@ -20,6 +20,7 @@ namespace eng
         virtual void OnKey(int /*key*/, int /*action*/) {}
         virtual void OnMouseMove(float /*dx*/, float /*dy*/) {}
         virtual void OnMouseButton(int /*button*/, int /*action*/) {}
+        virtual void OnMouseScroll(float /*offset*/) {}
 
         GameObject *gameObject = nullptr;
         bool started = false;
@@ -43,6 +44,7 @@ namespace eng
         void OnKey(int key, int action) override;
         void OnMouseMove(float dx, float dy) override;
         void OnMouseButton(int button, int action) override;
+        void OnMouseScroll(float offset) override;
 
     private:
         std::vector<std::unique_ptr<Script>> m_scripts;

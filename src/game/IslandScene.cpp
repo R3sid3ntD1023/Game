@@ -20,7 +20,7 @@ namespace game
         int trunkMesh[kTreeVariants], canopyMesh[kTreeVariants], fernMesh[kFernVariants];
 
         const int cube = s.AddMesh({"cube", "cube", {0.5f}});
-        const int sphere = s.AddMesh({"sphere", "sphere", {0.5f}});
+        const int boulder = s.AddMesh({"boulder", "model", {0.5f}, "models/forest_boulder_wgosajs_low.glb"});
         const int terrain = s.AddMesh({"terrain", kMeshTerrain, {320.0f}});
         const int sea = s.AddMesh({"sea", "plane", {900.0f, 1.0f}});
         const int raptor = s.AddMesh({"raptor", kMeshRaptor, {}});
@@ -338,7 +338,7 @@ namespace game
         {
             const glm::vec2 p = randomLandPoint(0.5f, 10.0f);
             const float sz = U(1.2f, 3.7f);
-            auto &r = add("Rock", {p.x, Terrain::Height(p.x, p.y) + sz * 0.25f, p.y}, {sz, sz * 0.7f, sz}, sphere, rock);
+            auto &r = add("Rock", {p.x, Terrain::Height(p.x, p.y) + sz * 0.25f, p.y}, {sz, sz * 0.7f, sz}, boulder, rock);
             r.hasBody = true;
             r.bodyStatic = true;
             r.halfExtents = {sz * 0.35f, sz * 0.25f, sz * 0.35f};

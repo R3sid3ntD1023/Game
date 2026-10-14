@@ -42,4 +42,10 @@ namespace eng
             s->OnMouseButton(button, action);
     }
 
+    void ScriptComponent::OnMouseScroll(float offset)
+    {
+        for (auto &s : m_scripts)
+            s->OnMouseScroll(offset);
+    }
+
 } // namespace eng
