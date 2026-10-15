@@ -89,7 +89,8 @@ namespace ui
         m_vao.SetVertexBuffer(m_vbo, sizeof(Vertex),
                               {{0, 2, static_cast<GLuint>(offsetof(Vertex, pos))},
                                {1, 2, static_cast<GLuint>(offsetof(Vertex, uv))},
-                               {2, 4, static_cast<GLuint>(offsetof(Vertex, color))}});
+                               {2, 4, static_cast<GLuint>(offsetof(Vertex, color))},
+                               {3, 1, static_cast<GLuint>(offsetof(Vertex, mode))}});
     }
 
     Renderer::~Renderer()
@@ -102,24 +103,31 @@ namespace ui
     {
         m_screen = screen;
         m_vertices.clear();
+        m_drawCommands.clear();
     }
 
     void Renderer::End()
     {
-        if (m_vertices.empty())
+        if (m_drawCommands.empty() || m_vertices.empty())
             return;
-        m_vbo.Upload(m_vertices.data(), m_vertices.size() * sizeof(Vertex));
 
         glDisable(GL_DEPTH_TEST);
+        glDisable(GL_SCISSOR_TEST);
         glDisable(GL_CULL_FACE);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         m_shader.Bind();
         m_shader.SetVec2("uScreen", m_screen);
-        glBindTextureUnit(0, m_atlas);
+
+        m_vbo.Upload(m_vertices.data(), m_vertices.size() * sizeof(Vertex));
         m_vao.Bind();
-        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(m_vertices.size()));
+
+        for (auto &cmd : m_drawCommands)
+        {
+            glBindTextureUnit(0, cmd.texture);
+            glDrawArrays(GL_TRIANGLES, static_cast<GLuint>(cmd.vertexOffset), static_cast<GLsizei>(cmd.vertexCount));
+        }
 
         glDisable(GL_BLEND);
     }
@@ -127,11 +135,32 @@ namespace ui
     void Renderer::Quad(const glm::vec2 &p0, const glm::vec2 &p1, const glm::vec2 &uv0, const glm::vec2 &uv1,
                         const Color &top, const Color &bottom)
     {
-        const Vertex tl{{p0.x, p0.y}, {uv0.x, uv0.y}, top};
-        const Vertex tr{{p1.x, p0.y}, {uv1.x, uv0.y}, top};
-        const Vertex br{{p1.x, p1.y}, {uv1.x, uv1.y}, bottom};
-        const Vertex bl{{p0.x, p1.y}, {uv0.x, uv1.y}, bottom};
-        m_vertices.insert(m_vertices.end(), {tl, tr, br, tl, br, bl});
+        const Vertex tl{{p0.x, p0.y}, {uv0.x, uv0.y}, top, 0};
+        const Vertex tr{{p1.x, p0.y}, {uv1.x, uv0.y}, top, 0};
+        const Vertex br{{p1.x, p1.y}, {uv1.x, uv1.y}, bottom, 0};
+        const Vertex bl{{p0.x, p1.y}, {uv0.x, uv1.y}, bottom, 0};
+
+        Vertex verts[6] = {tl, tr, br, tl, br, bl};
+        AddVertices(m_atlas, verts, 6);
+    }
+
+    void Renderer::QuadTexture(GLuint texture, const glm::vec2 &p0, const glm::vec2 &p1, const glm::vec2 &uv0, const glm::vec2 &uv1, const Color &top, const Color &bottom)
+    {
+        const Vertex tl{{p0.x, p0.y}, {uv0.x, uv0.y}, top, 1};
+        const Vertex tr{{p1.x, p0.y}, {uv1.x, uv0.y}, top, 1};
+        const Vertex br{{p1.x, p1.y}, {uv1.x, uv1.y}, bottom, 1};
+        const Vertex bl{{p0.x, p1.y}, {uv0.x, uv1.y}, bottom, 1};
+
+        Vertex verts[6] = {tl, tr, br, tl, br, bl};
+        AddVertices(texture, verts, 6);
+    }
+
+    void Renderer::AddVertices(GLuint texture, Vertex *vertices, size_t count)
+    {
+        if (m_drawCommands.empty() || m_drawCommands.back().texture != texture)
+            m_drawCommands.push_back({texture, m_vertices.size(), 0});
+        m_drawCommands.back().vertexCount += count;
+        m_vertices.insert(m_vertices.end(), vertices, vertices + count);
     }
 
     void Renderer::FillRect(const Rect &r, const Color &color) { FillGradient(r, color, color); }
@@ -179,6 +208,14 @@ namespace ui
             h = std::max(h, m_glyphs[index].h);
         }
         return {pen * size / kBakePx, h * size / kBakePx};
+    }
+
+    void Renderer::DrawImage(GLuint texture, const Rect &r, const Color &color)
+    {
+        if (texture == 0 || r.size.x <= 0.0f || r.size.y <= 0.0f)
+            return;
+
+        QuadTexture(texture, r.pos, r.pos + r.size, {0, 0}, {1, 1}, color, color);
     }
 
 } // namespace ui

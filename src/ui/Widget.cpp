@@ -114,23 +114,26 @@ namespace ui
 
     void Button::Draw(Renderer &r)
     {
-        Color c{0.12f, 0.16f, 0.22f, 0.92f};
+        Color finalBackgroundColor = backgroundColor;
         if (!enabled)
-            c = {0.15f, 0.15f, 0.15f, 0.6f};
+            finalBackgroundColor = disabledColor;
         else if (m_pressed)
-            c = {0.07f, 0.09f, 0.13f, 1.0f};
+            finalBackgroundColor = pressedColor;
         else if (m_hover)
-            c = {0.22f, 0.32f, 0.46f, 0.97f};
+            finalBackgroundColor = hoverColor;
 
-        r.FillRect(m_rect, c);
-        r.StrokeRect(m_rect, m_hover && enabled ? Color(1.0f, 0.85f, 0.4f, 0.9f) : Color(1.0f, 1.0f, 1.0f, 0.3f), 1.5f * m_scale);
+        r.FillRect(m_rect, finalBackgroundColor);
+        r.StrokeRect(m_rect, m_hover && enabled ? hoverColor : borderColor, 1.5f * m_scale);
 
-        const float s = textSize * m_scale;
-        const glm::vec2 extent = r.MeasureText(text, s);
-        const glm::vec2 p(m_rect.pos.x + (m_rect.size.x - extent.x) * 0.5f, m_rect.pos.y + (m_rect.size.y - s) * 0.5f + (m_pressed ? 1.0f : 0.0f));
-        const float a = enabled ? 1.0f : 0.5f;
-        r.Text(text, {p.x + 1.0f, p.y + 1.0f}, s, {0.0f, 0.0f, 0.0f, 0.7f * a});
-        r.Text(text, p, s, {1.0f, 1.0f, 1.0f, a});
+        if (!text.empty())
+        {
+            const float s = textSize * m_scale;
+            const glm::vec2 extent = r.MeasureText(text, s);
+            const glm::vec2 p(m_rect.pos.x + (m_rect.size.x - extent.x) * 0.5f, m_rect.pos.y + (m_rect.size.y - s) * 0.5f + (m_pressed ? 1.0f : 0.0f));
+            const float a = enabled ? 1.0f : 0.5f;
+            textColor.a *= a;
+            r.Text(text, p, s, textColor);
+        }
         DrawChildren(r);
     }
 
@@ -194,6 +197,17 @@ namespace ui
             if (binding)
                 *binding = value;
         }
+    }
+
+    void Image::Draw(Renderer &r)
+    {
+        if (texture)
+        {
+            r.DrawImage(texture, m_rect, color);
+        }
+        else
+            r.FillRect(m_rect, color);
+        DrawChildren(r);
     }
 
 } // namespace ui

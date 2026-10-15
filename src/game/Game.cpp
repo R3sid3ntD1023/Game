@@ -53,6 +53,8 @@ namespace game
         { ReturnToMenu(); };
         callbacks.quit = [this]
         { m_window.SetShouldClose(); };
+        callbacks.toSettings = [this]
+        { SetScreen(Screen::Settings); };
 
         m_menus = std::make_unique<MenuScreens>(m_canvas.Root(), std::move(callbacks), m_post);
 
@@ -71,6 +73,7 @@ namespace game
         m_window.GetInput().SetReceiver(playing ? m_receiver : nullptr);
 
         m_menus->ShowMain(screen == Screen::Menu);
+        m_menus->ShowSettings(screen == Screen::Settings);
         m_audio->SetMasterVolume(screen == Screen::Playing ? masterVolume : masterVolume * 0.1f);
         m_menus->ShowPause(screen == Screen::Paused);
         m_hud->SetVisible(screen != Screen::Menu && m_world != nullptr);

@@ -127,6 +127,13 @@ namespace ui
         std::string text;
         float textSize = 22.0f;
         bool enabled = true;
+        Color textColor{1.0f, 1.0f, 1.0f, 0.7f};
+        Color backgroundColor{0.12f, 0.16f, 0.22f, 0.92f};
+        Color borderColor{1.0f, 1.0f, 1.0f, 0.3f};
+        Color hoverColor{1.0f, 0.85f, 0.4f, 0.9f};
+        Color pressedColor{0.07f, 0.09f, 0.13f, 1.0f};
+        Color disabledColor{0.15f, 0.15f, 0.15f, 0.6f};
+
         std::function<void()> onClick;
 
     private:
@@ -186,6 +193,15 @@ namespace ui
 
     protected:
         void LayoutChildren(float scale) override;
+    };
+
+    class Image : public Widget
+    {
+    public:
+        void Draw(Renderer &r) override;
+
+        Color color{1.0f, 1.0f, 1.0f, 1.0f};
+        GLuint texture = 0;
     };
 
 } // namespace ui

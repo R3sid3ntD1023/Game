@@ -19,6 +19,10 @@ namespace game
         float treeHeight[kTreeVariants];
         int trunkMesh[kTreeVariants], canopyMesh[kTreeVariants], fernMesh[kFernVariants];
 
+        int medkits[2];
+        medkits[0] = s.AddMesh({"medkit", "model", {0.5f}, "models/medkit.glb"});
+        medkits[1] = s.AddMesh({"firstaid", "model", {0.5f}, "models/firstaid.glb"});
+
         const int cube = s.AddMesh({"cube", "cube", {0.5f}});
         const int boulder = s.AddMesh({"boulder", "model", {0.5f}, "models/forest_boulder_wgosajs_low.glb"});
         const int terrain = s.AddMesh({"terrain", kMeshTerrain, {320.0f}});
@@ -352,15 +356,15 @@ namespace game
             w.script = kScriptWeaponPickup;
             w.scriptParams = std::move(wp);
         };
-        auto medkit = [&](glm::vec2 xz)
+        auto medkit = [&](glm::vec2 xz, int variant)
         {
-            auto &m = add("Medkit", {xz.x, Terrain::Height(xz.x, xz.y) + 0.8f, xz.y}, {0.5f, 0.35f, 0.5f}, cube, medkitMat);
+            auto &m = add("Medkit", {xz.x, Terrain::Height(xz.x, xz.y) + 0.8f, xz.y}, {10.f, 10.f, 10.f}, medkits[variant], medkitMat);
             m.script = kScriptHealthPickup;
             m.scriptParams = {35.0f};
         };
 
         weaponPickup("Pistol", startXZ + glm::vec2(4.0f, 3.0f), {30.0f, 0.3f, 12.0f, 36.0f, 0.0f, 1.2f, 100.0f});
-        medkit(startXZ + glm::vec2(2.0f, 6.0f));
+        medkit(startXZ + glm::vec2(2.0f, 6.0f), 0);
         weaponPickup("Rifle", interiorSpots.empty() ? randomLandPoint(1.0f, 60.0f) : interiorSpots[0], {22.0f, 0.1f, 30.0f, 90.0f, 1.0f, 1.8f, 140.0f});
         for (size_t i = 1; i < interiorSpots.size(); ++i)
         {
@@ -373,11 +377,13 @@ namespace game
             }
             else
             {
-                medkit(interiorSpots[i]);
+                medkit(interiorSpots[i], 0);
             }
         }
         for (int i = 0; i < 3 + params.raptors / 3; ++i)
-            medkit(randomLandPoint(1.0f, 20.0f));
+        {
+            medkit(randomLandPoint(1.0f, 20.0f), i % 2);
+        }
 
         // Raptor script params = speed, bite damage.
         for (int i = 0; i < params.raptors; ++i)

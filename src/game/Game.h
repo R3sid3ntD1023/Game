@@ -18,7 +18,8 @@ namespace game
     {
         Menu,
         Playing,
-        Paused
+        Paused,
+        Settings
     };
 
     class Game

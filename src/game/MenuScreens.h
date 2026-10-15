@@ -1,5 +1,6 @@
 #pragma once
 #include "gfx/PostProcess.h"
+#include "gfx/Texture.h"
 #include "ui/Widget.h"
 #include <functional>
 #include <string>
@@ -13,6 +14,7 @@ namespace game
         std::function<void()> resume;
         std::function<void()> toMenu;
         std::function<void()> quit;
+        std::function<void()> toSettings;
     };
 
     // Main menu and pause menu, built once as retained widgets and toggled with ShowMain/ShowPause.
@@ -23,17 +25,24 @@ namespace game
 
         void ShowMain(bool visible) { m_main->visible = visible; }
         void ShowPause(bool visible) { m_pause->visible = visible; }
+        void ShowSettings(bool visible) { m_settings->visible = visible; }
         void SetMessage(const std::string &message) { m_message->text = message; }
         bool Regenerate() const { return m_regenerate->checked; }
         float MasterVolume() const { return m_masterVolume; }
 
     private:
+        void MakeSettingsMenu(ui::Widget &parent, MenuCallbacks cb, gfx::PostProcess &post);
+
+    private:
         ui::Widget *m_main = nullptr;
         ui::Widget *m_pause = nullptr;
+        ui::Widget *m_settings = nullptr;
         ui::Label *m_message = nullptr;
         ui::Checkbox *m_regenerate = nullptr;
         ui::Slider *m_volume = nullptr;
         float m_masterVolume = 1.0f;
+
+        std::shared_ptr<gfx::Texture> m_texture;
     };
 
 } // namespace game
