@@ -60,6 +60,7 @@ namespace game
 		float m_aggroRange = 35.0f;
 		float m_attackRange = 3.2f;
 
+		ai::AIContext m_aiContext;
 		ai::BehaviorTree m_behaviorTree;
 
 		DinosaurState m_stateEnum = DinosaurState::Idle;

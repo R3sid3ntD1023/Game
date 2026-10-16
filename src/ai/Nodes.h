@@ -4,87 +4,75 @@
 
 namespace ai
 {
-    class CompositeNode : public Node
-    {
-    public:
-        virtual ~CompositeNode() = default;
+	class CompositeNode : public Node
+	{
+	public:
+		virtual ~CompositeNode() = default;
 
-        void AddChild(Node *child)
-        {
-            children.push_back(child);
-        }
+		void AddChild(Node *child) { children.push_back(child); }
 
-    protected:
-        std::vector<Node *> &GetChildren()
-        {
-            return children;
-        }
+	protected:
+		std::vector<Node *> &GetChildren() { return children; }
 
-    private:
-        std::vector<Node *> children;
-    };
+	private:
+		std::vector<Node *> children;
+	};
 
-    class Sequence : public CompositeNode
-    {
-    public:
-        virtual ~Sequence() = default;
+	class Sequence : public CompositeNode
+	{
+	public:
+		virtual ~Sequence() = default;
 
-        NodeStatus Execute() override;
-    };
+		NodeStatus Execute(AIContext &ctx) override;
+	};
 
-    class Selector : public CompositeNode
-    {
-    public:
-        virtual ~Selector() = default;
+	class Selector : public CompositeNode
+	{
+	public:
+		virtual ~Selector() = default;
 
-        NodeStatus Execute() override;
-    };
+		NodeStatus Execute(AIContext &ctx) override;
+	};
 
-    class Inverter : public Node
-    {
-    public:
-        virtual ~Inverter() = default;
+	class Inverter : public Node
+	{
+	public:
+		virtual ~Inverter() = default;
 
-        NodeStatus Execute() override;
+		NodeStatus Execute(AIContext &ctx) override;
 
-        void SetChild(Node *node)
-        {
-            child = node;
-        }
+		void SetChild(Node *node) { child = node; }
 
-    private:
-        Node *child = nullptr;
-    };
+	private:
+		Node *child = nullptr;
+	};
 
-    class Conditional : public Node
-    {
-    public:
-        virtual ~Conditional() = default;
+	using ConditionFunc = std::function<bool(AIContext &)>;
+	using ActionFunc = std::function<NodeStatus(AIContext &)>;
 
-        NodeStatus Execute() override;
+	class Conditional : public Node
+	{
+	public:
+		virtual ~Conditional() = default;
 
-        void SetCondition(std::function<bool()> func)
-        {
-            condition = func;
-        }
+		NodeStatus Execute(AIContext &ctx) override;
 
-    private:
-        std::function<bool()> condition;
-    };
+		void SetCondition(ConditionFunc func) { condition = std::move(func); }
 
-    class Action : public Node
-    {
-    public:
-        virtual ~Action() = default;
+	private:
+		ConditionFunc condition;
+	};
 
-        NodeStatus Execute() override;
+	class Action : public Node
+	{
+	public:
+		virtual ~Action() = default;
 
-        void SetAction(std::function<NodeStatus()> func)
-        {
-            action = func;
-        }
+		NodeStatus Execute(AIContext &ctx) override;
 
-    private:
-        std::function<NodeStatus()> action;
-    };
-}
+		void SetAction(ActionFunc func) { action = std::move(func); }
+
+	private:
+		ActionFunc action;
+	};
+} // namespace ai

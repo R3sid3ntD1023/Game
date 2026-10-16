@@ -1,22 +1,23 @@
 #pragma once
 
-#include "eng/GameObject.h"
+#include "AIContext.h"
 
 namespace ai
 {
-    enum class NodeStatus
-    {
-        Success,
-        Failure,
-        Running
-    };
+	enum class NodeStatus
+	{
+		Success,
+		Failure,
+		Running
+	};
 
-    class Node
-    {
-    public:
-        virtual ~Node() = default;
+	// Base class for all behavior tree nodes. Each node must implement the Execute method.
+	class Node
+	{
+	public:
+		virtual ~Node() = default;
 
-        virtual NodeStatus Execute() = 0;
-    };
+		virtual NodeStatus Execute(AIContext &ctx) = 0;
+	};
 
-}
+} // namespace ai

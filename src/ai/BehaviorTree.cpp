@@ -4,16 +4,16 @@
 
 namespace ai
 {
-    void BehaviorTree::Tick()
-    {
-        if (root && status == NodeStatus::Running)
-        {
-            status = root->Execute();
-        }
-    }
+	void BehaviorTree::Tick(AIContext &ctx)
+	{
+		if (root && status == NodeStatus::Running)
+		{
+			status = root->Execute(ctx);
+		}
+	}
 
-    void BehaviorTree::SetRoot(Node *node)
-    {
-        root = node;
-    }
-}
+	void BehaviorTree::SetRoot(Node *node)
+	{
+		root = node;
+	}
+} // namespace ai

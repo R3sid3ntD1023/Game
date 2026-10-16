@@ -1,56 +1,60 @@
 #pragma once
 
+#include <any>
 #include <memory>
 #include <string>
 #include <unordered_map>
 
 namespace ai
 {
+	// A simple key-value store for AI data, using std::any to hold values of any type.
+	class Blackboard
+	{
+	public:
+		template <typename T>
+		void Add(std::string_view key, const T &value)
+		{
+			data[std::string(key)] = std::any(value);
+		}
 
-    struct BlackboardKey
-    {
-        virtual ~BlackboardKey() = default;
-    };
+		template <typename T>
+		void Set(std::string_view key, const T &value)
+		{
+			if (data.contains(std::string(key)))
+				data[std::string(key)] = std::any(value);
+			else
+				throw std::runtime_error("Key not found");
+		}
 
-    template <typename T>
-    struct BlackboardValue : public BlackboardKey
-    {
-        T value;
-    };
+		template <typename T>
+		T &Get(std::string_view key)
+		{
+			if (Has<T>(key))
+			{
+				return std::any_cast<T &>(data.at(std::string(key)));
+			}
+			throw std::runtime_error("Key not found or type mismatch");
+		}
 
-    class Blackboard
-    {
-    public:
-        template <typename T>
-        T Get(const std::string &key)
-        {
-            auto it = data.find(key);
-            if (it != data.end())
-            {
-                auto derived = dynamic_cast<BlackboardValue<T> *>(it->second.get());
-                if (derived)
-                    return derived->value;
-            }
-            throw std::runtime_error("Key not found or type mismatch");
-        }
+		template <typename T>
+		const T &Get(std::string_view key) const
+		{
+			if (Has<T>(key))
+			{
+				return std::any_cast<const T &>(data.at(std::string(key)));
+			}
+			throw std::runtime_error("Key not found or type mismatch");
+		}
 
-        template <typename T>
-        void Set(const std::string &key, const T &value)
-        {
-            if (data.contains(key))
-                dynamic_cast<BlackboardValue<T> *>(data[key].get())->value = value;
-            else
-                throw std::runtime_error("Key not found");
-        }
+		template <typename T>
+		bool Has(std::string_view key) const
+		{
+			return data.contains(std::string(key));
+		}
 
-        template <typename T>
-        void Add(const std::string &key, const T &value)
-        {
-            data[key] = std::make_unique<BlackboardValue<T>>();
-            dynamic_cast<BlackboardValue<T> *>(data[key].get())->value = value;
-        }
+		void Remove(std::string_view key) { data.erase(std::string(key)); }
 
-    private:
-        std::unordered_map<std::string, std::unique_ptr<BlackboardKey>> data;
-    };
-}
+	private:
+		std::unordered_map<std::string, std::any> data;
+	};
+} // namespace ai
