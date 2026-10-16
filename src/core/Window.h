@@ -22,6 +22,7 @@ namespace core
         void SwapBuffers();
         void SetTitle(const std::string &title);
         void SetCursorCaptured(bool captured);
+        void SetVSync(bool enabled);
 
         glm::ivec2 FramebufferSize() const;
         glm::vec2 CursorPosition() const; // framebuffer pixels, origin top-left

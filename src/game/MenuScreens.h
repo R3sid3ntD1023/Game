@@ -31,7 +31,9 @@ namespace game
         float MasterVolume() const { return m_masterVolume; }
 
     private:
+        void MakeMainMenu(ui::Widget &parent, MenuCallbacks cb);
         void MakeSettingsMenu(ui::Widget &parent, MenuCallbacks cb, gfx::PostProcess &post);
+        void MakePauseMenu(ui::Widget &parent, MenuCallbacks cb);
 
     private:
         ui::Widget *m_main = nullptr;

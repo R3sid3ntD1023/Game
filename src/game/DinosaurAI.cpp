@@ -1,4 +1,5 @@
 #include "game/DinosaurAI.h"
+#include "ai/Nodes.h"
 #include "eng/World.h"
 #include <algorithm>
 #include <cmath>
@@ -10,95 +11,260 @@
 namespace game
 {
 
-    void DinosaurAI::OnStart()
-    {
-        m_body = gameObject->GetComponent<eng::RigidBody>();
-        m_health = gameObject->GetComponent<eng::Health>();
-        m_targetHealth = m_target.GetComponent<eng::Health>();
-        m_animator = gameObject->GetComponent<eng::Animator>();
-    }
+	void DinosaurAI::OnStart()
+	{
+		m_body = gameObject->GetComponent<eng::RigidBody>();
+		m_health = gameObject->GetComponent<eng::Health>();
+		m_targetHealth = m_target.GetComponent<eng::Health>();
+		m_animator = gameObject->GetComponent<eng::Animator>();
 
-    void DinosaurAI::OnUpdate(float dt)
-    {
-        m_attackTimer = std::max(0.0f, m_attackTimer - dt);
-        if (m_health && m_health->Dead())
-        {
-            ++m_state.kills;
-            spdlog::info("Dinosaur down ({} kills)", m_state.kills);
-            gameObject->GetWorld().EmitBlood(gameObject->GetTransform().position, glm::vec3(0.0f, 1.0f, 0.0f), 60);
-            gameObject->Destroy();
-        }
-    }
+		InitializeBehaviorTree();
+	}
 
-    void DinosaurAI::OnFixedUpdate(float dt)
-    {
-        if (!m_body || (m_health && m_health->Dead()))
-            return;
+	void DinosaurAI::OnUpdate(float dt)
+	{
+		m_attackTimer = std::max(0.0f, m_attackTimer - dt);
 
-        Transform &self = gameObject->GetTransform();
-        glm::vec3 toTarget = m_target.GetTransform().position - self.position;
-        toTarget.y = 0.0f;
-        const float dist = glm::length(toTarget);
+		if (m_health && m_health->Dead())
+		{
+			++m_state.kills;
+			SetState(DinosaurState::Dead);
+			m_body->velocity = glm::vec3(0.0f);
+			spdlog::info("Dinosaur down ({} kills)", m_state.kills);
+			gameObject->GetWorld().EmitBlood(gameObject->GetTransform().position, glm::vec3(0.0f, 1.0f, 0.0f), 60);
+			gameObject->Destroy();
+		}
 
-        glm::vec3 dir{0.0f};
-        float speed = 0.0f;
-        if (dist < m_attackRange)
-        {
-            if (m_attackTimer <= 0.0f && m_targetHealth)
-            {
-                m_targetHealth->Damage(m_damage);
-                gameObject->GetWorld().EmitBlood(m_target.GetTransform().position + glm::vec3(0.0f, 0.5f, 0.0f),
-                                                 toTarget / std::max(dist, 0.01f), 16);
-                m_attackTimer = 1.0f;
-            }
-            if (dist > 1e-3f)
-                dir = toTarget / dist;
-        }
-        else if (dist < m_aggroRange)
-        {
-            dir = toTarget / dist;
-            speed = m_speed;
-        }
-        else
-        {
-            m_wanderTimer -= dt;
-            if (m_wanderTimer <= 0.0f)
-            {
-                const float a = static_cast<float>(std::rand() % 628) / 100.0f;
-                m_wanderDir = (std::rand() % 3 == 0) ? glm::vec3(0.0f) : glm::vec3(std::cos(a), 0.0f, std::sin(a));
-                m_wanderTimer = 2.0f + static_cast<float>(std::rand() % 300) / 100.0f;
-            }
-            dir = m_wanderDir;
-            speed = m_speed * 0.3f;
-        }
+		UpdateAudio(dt);
+		UpdateAnimation();
+	}
 
-        m_body->velocity.x = dir.x * speed;
-        m_body->velocity.z = dir.z * speed;
-        if (audio::AudioEngine *audio = gameObject->GetWorld().audio)
-        {
-            if (speed > 0.5f && m_body->grounded)
-            {
-                m_stepDistance += speed * dt;
-                if (m_stepDistance > 2.8f)
-                {
-                    m_stepDistance = 0.0f;
-                    audio->PlayOneShot("footstep_" + std::to_string(std::rand() % 4), self.position, 1.2f, 0.45f);
-                }
-            }
-            const bool chasing = dist >= m_attackRange && dist < m_aggroRange;
-            if (chasing && !m_chasing)
-                audio->PlayOneShot("raptor_roar", self.position, 1.0f, 0.9f + 0.2f * static_cast<float>(std::rand() % 100) / 100.0f);
-            m_chasing = chasing;
-        }
-        if (m_animator)
-        {
-            const float blend = m_speed > 0.0f ? speed / m_speed : 0.0f;
-            m_animator->blend = blend;
-            m_animator->speed = 0.7f + 1.3f * blend;
-        }
-        // Mesh long axis is local +X; rotating about Y by theta maps it to (cos t, 0, -sin t).
-        if (glm::dot(dir, dir) > 0.0f)
-            self.rotation = glm::angleAxis(std::atan2(-dir.z, dir.x), glm::vec3(0, 1, 0));
-    }
+	void DinosaurAI::OnFixedUpdate(float dt)
+	{
+		if (!m_body || (m_health && m_health->Dead()))
+			return;
+
+		m_wanderTimer -= dt;
+
+		m_behaviorTree.Tick();
+	}
+
+	void DinosaurAI::InitializeBehaviorTree()
+	{
+		auto root = m_behaviorTree.AddNode<ai::Selector>();
+
+		// attack sequence
+		auto attackRange = m_behaviorTree.AddNode<ai::Conditional>();
+		attackRange->SetCondition(
+			[this]()
+			{
+				auto &self = gameObject->GetTransform();
+				auto &target = m_target.GetTransform();
+				glm::vec3 dist = target.position - self.position;
+				dist.y = 0.0f;
+				return glm::length(dist) < m_attackRange;
+			}
+		);
+
+		auto attack = m_behaviorTree.AddNode<ai::Action>();
+		attack->SetAction(
+			[this]()
+			{
+				SetState(DinosaurState::Attacking);
+
+				auto &self = gameObject->GetTransform();
+				auto &target = m_target.GetTransform();
+				glm::vec3 dir = target.position - self.position;
+				dir.y = 0.0f;
+				float dist = glm::length(dir);
+
+				if (dist > 1e-3f)
+				{
+					dir = (target.position - self.position) / dist;
+				}
+
+				m_body->velocity.x = 0.0f;
+				m_body->velocity.z = 0.0f;
+
+				if (m_attackTimer <= 0.0f && m_targetHealth)
+				{
+					m_targetHealth->Damage(m_damage);
+					gameObject->GetWorld().EmitBlood(target.position + glm::vec3(0.0f, 0.5f, 0.0f), dir, 16);
+					m_attackTimer = 1.0f;
+				}
+
+				if (glm::dot(dir, dir) > 0.0f)
+				{
+					self.rotation = glm::angleAxis(std::atan2(-dir.z, dir.x), glm::vec3(0, 1, 0));
+				}
+
+				return ai::NodeStatus::Running;
+			}
+		);
+
+		auto attackSequence = m_behaviorTree.AddNode<ai::Sequence>();
+		attackSequence->AddChild(attackRange);
+		attackSequence->AddChild(attack);
+
+		// chase behavior
+
+		auto chaseRange = m_behaviorTree.AddNode<ai::Conditional>();
+		chaseRange->SetCondition(
+			[this]()
+			{
+				auto &self = gameObject->GetTransform();
+				auto &target = m_target.GetTransform();
+				float dist = glm::length(target.position - self.position);
+				return dist >= m_attackRange && dist < m_aggroRange;
+			}
+		);
+
+		auto chase = m_behaviorTree.AddNode<ai::Action>();
+		chase->SetAction(
+			[this]()
+			{
+				SetState(DinosaurState::Chasing);
+
+				auto &self = gameObject->GetTransform();
+				auto &target = m_target.GetTransform();
+				auto dir = target.position - self.position;
+				dir.y = 0.0f;
+				auto len = glm::length(dir);
+
+				if (len > 0.0f)
+				{
+					dir /= len;
+					self.rotation = glm::angleAxis(std::atan2(-dir.z, dir.x), glm::vec3(0, 1, 0));
+				}
+
+				m_body->velocity.x = dir.x * m_speed;
+				m_body->velocity.z = dir.z * m_speed;
+
+				return ai::NodeStatus::Running;
+			}
+		);
+
+		auto chaseSequence = m_behaviorTree.AddNode<ai::Sequence>();
+		chaseSequence->AddChild(chaseRange);
+		chaseSequence->AddChild(chase);
+
+		// wander behavior
+		auto wander = m_behaviorTree.AddNode<ai::Action>();
+		wander->SetAction(
+			[this]()
+			{
+				SetState(DinosaurState::Wandering);
+
+				auto &self = gameObject->GetTransform();
+
+				if (m_wanderTimer <= 0.0f)
+				{
+					const float a = static_cast<float>(std::rand() % 628) / 100.0f;
+					m_wanderDir = (std::rand() % 3 == 0) ? glm::vec3(0.0f) : glm::vec3(std::cos(a), 0.0f, std::sin(a));
+					m_wanderTimer = 2.0f + static_cast<float>(std::rand() % 300) / 100.0f;
+				}
+
+				m_body->velocity.x = m_wanderDir.x * m_speed * 0.3f;
+				m_body->velocity.z = m_wanderDir.z * m_speed * 0.3f;
+
+				if (glm::dot(m_wanderDir, m_wanderDir) > 0.0f)
+					self.rotation = glm::angleAxis(std::atan2(-m_wanderDir.z, m_wanderDir.x), glm::vec3(0, 1, 0));
+
+				return ai::NodeStatus::Running;
+			}
+		);
+
+		root->AddChild(attackSequence);
+		root->AddChild(chaseSequence);
+		root->AddChild(wander);
+		m_behaviorTree.SetRoot(root);
+	}
+
+	void DinosaurAI::UpdateAudio(float dt)
+	{
+		audio::AudioEngine *audio = gameObject->GetWorld().audio;
+		if (!audio)
+			return;
+
+		if (m_stateEnum != DinosaurState::Wandering && m_stateEnum != DinosaurState::Chasing)
+			return;
+
+		float speed = m_stateEnum == DinosaurState::Chasing ? m_speed : m_speed * 0.3f;
+
+		if (!m_body->grounded)
+			return;
+
+		m_stepDistance += speed * dt;
+
+		float distancePerStep = m_stateEnum == DinosaurState::Chasing ? 1.8f : 2.8f;
+		if (m_stepDistance >= distancePerStep)
+		{
+			m_stepDistance = 0.0f;
+			audio->PlayOneShot("footstep_" + std::to_string(std::rand() % 4), gameObject->GetTransform().position, 1.2f, 0.45f);
+		}
+	}
+
+	void DinosaurAI::UpdateAnimation()
+	{
+		if (!m_animator)
+			return;
+
+		switch (m_stateEnum)
+		{
+		case DinosaurState::Idle:
+			m_animator->blend = 0.0f;
+			m_animator->speed = 1.0f;
+			break;
+		case DinosaurState::Wandering:
+			m_animator->blend = 0.3f;
+			m_animator->speed = 0.8f;
+			break;
+		case DinosaurState::Chasing:
+			m_animator->blend = 1.0f;
+			m_animator->speed = 2.0f;
+			break;
+		case DinosaurState::Attacking:
+			m_animator->blend = 0.0f;
+			m_animator->speed = 1.5f;
+			break;
+		case DinosaurState::Dead:
+			m_animator->blend = 0.0f;
+			m_animator->speed = 0.0f;
+			break;
+		default:
+			break;
+		}
+	}
+
+	void DinosaurAI::SetState(DinosaurState state)
+	{
+		if (m_stateEnum == state)
+			return;
+
+		m_prevStateEnum = m_stateEnum;
+		m_stateEnum = state;
+
+		OnStateChanged(state);
+	}
+
+	void DinosaurAI::OnStateChanged(DinosaurState state)
+	{
+		auto audio = gameObject->GetWorld().audio;
+		if (!audio)
+			return;
+
+		switch (state)
+		{
+		case DinosaurState::Chasing:
+			audio->PlayOneShot("raptor_roar", gameObject->GetTransform().position, 1.0f, 0.9f + 0.2f * static_cast<float>(std::rand() % 100) / 100.0f);
+			break;
+		case DinosaurState::Attacking:
+			audio->PlayOneShot("raptor_attack", gameObject->GetTransform().position);
+			break;
+
+		default:
+			break;
+		}
+	}
 
 } // namespace game

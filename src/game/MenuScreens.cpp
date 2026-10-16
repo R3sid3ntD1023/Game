@@ -51,9 +51,17 @@ namespace game
     {
         m_texture = gfx::Texture::FromFile(ASSETS_DIR "textures/gear.png", false);
 
+        MakeMainMenu(parent, cb);
+
+        MakeSettingsMenu(parent, cb, post);
+
+        MakePauseMenu(parent, cb);
+    }
+
+    void MenuScreens::MakeMainMenu(ui::Widget &parent, MenuCallbacks cb)
+    {
         using ui::Anchor;
 
-        // Main menu
         auto &main = parent.Add<ui::Panel>();
         main.Stretch();
         main.gradient = true;
@@ -99,28 +107,6 @@ namespace game
         m_message = &MakeLabel(main, Anchor::Bottom, {0.0f, 70.0f}, {1100.0f, 26.0f}, 20.0f, {1.0f, 0.4f, 0.35f, 1.0f}, "");
         MakeLabel(main, Anchor::Bottom, {0.0f, 30.0f}, {1100.0f, 26.0f}, 18.0f, {0.6f, 0.65f, 0.7f, 1.0f},
                   "WASD move | Shift sprint | Space jump | LMB fire | R reload | E interact | F flashlight | Esc pause");
-
-        MakeSettingsMenu(parent, cb, post);
-
-        // Pause menu
-        auto &pause = parent.Add<ui::Panel>();
-        pause.Stretch();
-        pause.color = {0.0f, 0.0f, 0.0f, 0.6f};
-        pause.visible = false;
-        m_pause = &pause;
-
-        MakeLabel(pause, Anchor::Top, {0.0f, 150.0f}, {800.0f, 80.0f}, 64.0f, {1.0f, 1.0f, 1.0f, 1.0f}, "PAUSED");
-        auto &pauseStack = pause.Add<ui::StackPanel>();
-        pauseStack.anchor = Anchor::Center;
-        pauseStack.offset = {0.0f, 30.0f};
-        pauseStack.size = {360.0f, 180.0f};
-        pauseStack.spacing = 14.0f;
-        MakeButton(pauseStack, "Resume", [f = cb.resume]
-                   { if (f) f(); });
-        MakeButton(pauseStack, "Main Menu", [f = cb.toMenu]
-                   { if (f) f(); });
-        MakeButton(pauseStack, "Quit", [f = cb.quit]
-                   { if (f) f(); });
     }
 
     void MenuScreens::MakeSettingsMenu(ui::Widget &parent, MenuCallbacks cb, gfx::PostProcess &post)
@@ -156,6 +142,30 @@ namespace game
         back.anchor = Anchor::BottomRight;
         back.size = {50.0f, 50.0f};
         back.offset = {20.0f, 20.0f};
+    }
+
+    void MenuScreens::MakePauseMenu(ui::Widget &parent, MenuCallbacks cb)
+    {
+        using ui::Anchor;
+
+        auto &pause = parent.Add<ui::Panel>();
+        pause.Stretch();
+        pause.color = {0.0f, 0.0f, 0.0f, 0.6f};
+        pause.visible = false;
+        m_pause = &pause;
+
+        MakeLabel(pause, Anchor::Top, {0.0f, 150.0f}, {800.0f, 80.0f}, 64.0f, {1.0f, 1.0f, 1.0f, 1.0f}, "PAUSED");
+        auto &pauseStack = pause.Add<ui::StackPanel>();
+        pauseStack.anchor = Anchor::Center;
+        pauseStack.offset = {0.0f, 30.0f};
+        pauseStack.size = {360.0f, 180.0f};
+        pauseStack.spacing = 14.0f;
+        MakeButton(pauseStack, "Resume", [f = cb.resume]
+                   { if (f) f(); });
+        MakeButton(pauseStack, "Main Menu", [f = cb.toMenu]
+                   { if (f) f(); });
+        MakeButton(pauseStack, "Quit", [f = cb.quit]
+                   { if (f) f(); });
     }
 
 } // namespace game

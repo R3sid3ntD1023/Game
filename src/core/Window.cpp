@@ -43,7 +43,7 @@ namespace core
             throw std::runtime_error("Failed to create window (OpenGL 4.6 required)");
         }
         glfwMakeContextCurrent(m_window);
-        glfwSwapInterval(1);
+        glfwSwapInterval(0);
 
         if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
             throw std::runtime_error("Failed to load OpenGL");
@@ -80,6 +80,11 @@ namespace core
     {
         glfwSetInputMode(m_window, GLFW_CURSOR, captured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
         m_input.ResetMouse();
+    }
+
+    void Window::SetVSync(bool enabled)
+    {
+        glfwSwapInterval(enabled ? 1 : 0);
     }
 
     glm::vec2 Window::CursorPosition() const

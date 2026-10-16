@@ -17,7 +17,8 @@ namespace game
         constexpr int kTreeVariants = 6;
         constexpr int kFernVariants = 4;
         float treeHeight[kTreeVariants];
-        int trunkMesh[kTreeVariants], canopyMesh[kTreeVariants], fernMesh[kFernVariants];
+        int /*trunkMesh[kTreeVariants], canopyMesh[kTreeVariants],*/ fernMesh[kFernVariants];
+        int tree = s.AddMesh({"tree", "model", {1.0f}, "models/realistic_tree.glb"});
 
         int medkits[2];
         medkits[0] = s.AddMesh({"medkit", "model", {0.5f}, "models/medkit.glb"});
@@ -28,19 +29,19 @@ namespace game
         const int terrain = s.AddMesh({"terrain", kMeshTerrain, {320.0f}});
         const int sea = s.AddMesh({"sea", "plane", {900.0f, 1.0f}});
         const int raptor = s.AddMesh({"raptor", kMeshRaptor, {}});
-        for (int v = 0; v < kTreeVariants; ++v)
-        {
-            const uint32_t seed = 100u + static_cast<uint32_t>(v);
-            treeHeight[v] = GenerateRainforestTree(seed).height;
-            trunkMesh[v] = s.AddMesh({"trunk", kMeshTreeTrunk, {static_cast<float>(seed)}});
-            canopyMesh[v] = s.AddMesh({"canopy", kMeshTreeCanopy, {static_cast<float>(seed)}});
-        }
+        // for (int v = 0; v < kTreeVariants; ++v)
+        // {
+        //     const uint32_t seed = 100u + static_cast<uint32_t>(v);
+        //     // treeHeight[v] = GenerateRainforestTree(seed).height;
+        //     //  trunkMesh[v] = s.AddMesh({"trunk", kMeshTreeTrunk, {static_cast<float>(seed)}});
+        //     canopyMesh[v] = s.AddMesh({"canopy", "model", {1.0f}, "models/realistic_tree.glb"});
+        // }
         for (int v = 0; v < kFernVariants; ++v)
             fernMesh[v] = s.AddMesh({"fern", kMeshFern, {static_cast<float>(200 + v)}});
 
         const int grass = s.AddMaterial({"ground", {0.07f, 0.12f, 0.05f}, 0.0f, 0.95f, {}});
         const int water = s.AddMaterial({"sea", {0.01f, 0.04f, 0.07f}, 0.0f, 0.05f, {}});
-        const int bark = s.AddMaterial({"bark", {0.16f, 0.11f, 0.08f}, 0.0f, 0.9f, {}});
+        // const int bark = s.AddMaterial({"bark", {0.16f, 0.11f, 0.08f}, 0.0f, 0.9f, {}});
         const int leaves = s.AddMaterial({"leaves", {0.05f, 0.16f, 0.05f}, 0.0f, 0.75f, {}});
         const int fern = s.AddMaterial({"fern", {0.08f, 0.22f, 0.06f}, 0.0f, 0.8f, {}});
         const int rock = s.AddMaterial({"rock", {0.25f, 0.25f, 0.27f}, 0.0f, 0.6f, {}});
@@ -319,16 +320,16 @@ namespace game
             const glm::vec2 p = randomLandPoint(1.5f, 15.0f);
             const int v = i % kTreeVariants;
             const float scale = U(0.8f, 1.3f);
-            const float H = treeHeight[v] * scale;
-            const glm::vec3 pos{p.x, Terrain::Height(p.x, p.y) + H * 0.5f - 0.4f, p.y};
+            // const float H = treeHeight[v] * scale;
+            const glm::vec3 pos{p.x, Terrain::Height(p.x, p.y) - .4f, p.y};
             const glm::quat rot = yaw();
 
-            auto &t = add("Tree", pos, glm::vec3(scale), trunkMesh[v], bark);
-            t.rotation = rot;
-            t.hasBody = true;
-            t.bodyStatic = true;
-            t.halfExtents = {0.7f * scale, H * 0.5f, 0.7f * scale};
-            add("Canopy", pos, glm::vec3(scale), canopyMesh[v], leaves).rotation = rot;
+            // auto &t = add("Tree", pos, glm::vec3(scale), trunkMesh[v], bark);
+            // t.rotation = rot;
+            // t.hasBody = true;
+            // t.bodyStatic = true;
+            // t.halfExtents = {0.7f * scale, H * 0.5f, 0.7f * scale};
+            add("Canopy", pos, glm::vec3(scale), tree, leaves).rotation = rot;
         }
 
         for (int i = 0; i < params.ferns; ++i)
