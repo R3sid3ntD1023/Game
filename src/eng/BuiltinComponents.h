@@ -1,5 +1,6 @@
 #pragma once
 #include "eng/Component.h"
+#include "gfx/Camera.h"
 #include "gfx/Material.h"
 #include "gfx/Mesh.h"
 #include <algorithm>
@@ -59,6 +60,15 @@ namespace eng
 		float current;
 		OnDamageCallback onDamage;
 		OnHealCallback onHeal;
+	};
+
+	class CameraComponent : public Component
+	{
+	public:
+		CameraComponent() = default;
+
+		bool active = true;
+		gfx::Camera camera;
 	};
 
 } // namespace eng
