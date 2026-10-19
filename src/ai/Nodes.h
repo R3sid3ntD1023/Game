@@ -1,9 +1,24 @@
 #pragma once
 
 #include "Node.h"
+#include <eng/PathFinder.h>
 
 namespace ai
 {
+
+	class Decorator : public Node
+	{
+	public:
+		virtual ~Decorator() = default;
+
+		void SetChild(Node *node) { m_child = node; }
+
+		Node *GetChild() const { return m_child; }
+
+	private:
+		Node *m_child = nullptr;
+	};
+
 	class CompositeNode : public Node
 	{
 	public:
@@ -11,11 +26,24 @@ namespace ai
 
 		void AddChild(Node *child) { children.push_back(child); }
 
-	protected:
 		std::vector<Node *> &GetChildren() { return children; }
 
 	private:
 		std::vector<Node *> children;
+	};
+
+	class Root : public Decorator
+	{
+	public:
+		Node::State OnExecute(AIContext &ctx) override;
+	};
+
+	class Repeat : public Decorator
+	{
+	public:
+		virtual ~Repeat() = default;
+
+		Node::State OnExecute(AIContext &ctx) override;
 	};
 
 	class Sequence : public CompositeNode
@@ -23,7 +51,7 @@ namespace ai
 	public:
 		virtual ~Sequence() = default;
 
-		NodeStatus Execute(AIContext &ctx) override;
+		Node::State OnExecute(AIContext &ctx) override;
 	};
 
 	class Selector : public CompositeNode
@@ -31,7 +59,7 @@ namespace ai
 	public:
 		virtual ~Selector() = default;
 
-		NodeStatus Execute(AIContext &ctx) override;
+		Node::State OnExecute(AIContext &ctx) override;
 	};
 
 	class Inverter : public Node
@@ -39,7 +67,7 @@ namespace ai
 	public:
 		virtual ~Inverter() = default;
 
-		NodeStatus Execute(AIContext &ctx) override;
+		Node::State OnExecute(AIContext &ctx) override;
 
 		void SetChild(Node *node) { child = node; }
 
@@ -48,14 +76,14 @@ namespace ai
 	};
 
 	using ConditionFunc = std::function<bool(AIContext &)>;
-	using ActionFunc = std::function<NodeStatus(AIContext &)>;
+	using ActionFunc = std::function<Node::State(AIContext &)>;
 
 	class Conditional : public Node
 	{
 	public:
 		virtual ~Conditional() = default;
 
-		NodeStatus Execute(AIContext &ctx) override;
+		Node::State OnExecute(AIContext &ctx) override;
 
 		void SetCondition(ConditionFunc func) { condition = std::move(func); }
 
@@ -68,11 +96,33 @@ namespace ai
 	public:
 		virtual ~Action() = default;
 
-		NodeStatus Execute(AIContext &ctx) override;
+		Node::State OnExecute(AIContext &ctx) override;
 
 		void SetAction(ActionFunc func) { action = std::move(func); }
 
 	private:
 		ActionFunc action;
+	};
+
+	struct MoveTo : public ai::Node
+	{
+		std::string m_target;
+		float m_speed = 0.0f;
+		float m_stopDistance = 1.0f;
+
+		void OnStart(ai::AIContext &ctx) override;
+
+		ai::Node::State OnExecute(ai::AIContext &ctx) override;
+
+	private:
+		std::deque<eng::PathFinder::Node> m_path;
+		eng::PathFinder::Node *m_currentNode = nullptr;
+	};
+
+	struct FindRandomReachablePoint : public ai::Node
+	{
+		std::string m_target;
+
+		ai::Node::State OnExecute(ai::AIContext &ctx) override;
 	};
 } // namespace ai

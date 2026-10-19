@@ -8,7 +8,8 @@ namespace game
 	static constexpr float kTerrainSize = Terrain::kIslandRadius;
 	static constexpr float kWalkRadius = Terrain::kWalkRadius;
 	static constexpr float kSeaLevel = Terrain::kSeaLevel;
-	static constexpr float kHeightMapScale = 10.f;
+	static constexpr float kHeightMapScale = 20.f;
+	static constexpr float kMaxSlope = 0.75f;
 
 	float ProceduralHeightSource::Height(float x, float z) const
 	{
@@ -22,12 +23,48 @@ namespace game
 		return -4.0f + (4.0f + 6.0f + hills) * t;
 	}
 
+	float HeightMapSource::Height(float x, float z) const
+	{
+		float u = (x + kWorldHalfSize) / (kWorldHalfSize * 2);
+		float v = (z + kWorldHalfSize) / (kWorldHalfSize * 2);
+
+		u = std::clamp(u, 0.0f, 1.0f);
+		v = std::clamp(v, 0.0f, 1.0f);
+
+		const int ix = static_cast<int>(u * (source.width - 1));
+		const int iz = static_cast<int>(v * (source.height - 1));
+		if (ix < 0 || ix >= source.width || iz < 0 || iz >= source.height)
+			return 0.0f;
+
+		const int index = (iz * source.width + ix) * source.channels;
+		float pixel = (static_cast<float>(source.data[index])) / 255.0f;
+		return (pixel - 0.5f) * 2.0f * kHeightMapScale;
+	}
+
 	float Terrain::Height(float x, float z) const
 	{
 		if (heightSource)
 			return heightSource->Height(x, z);
 
 		return 0.f;
+	}
+
+	bool Terrain::IsWalkable(float x, float z) const
+	{
+		auto n = Normal(x, z);
+		auto h = Height(x, z);
+		return n.y >= kMaxSlope && h > kSeaLevel && x < kWalkRadius && z < kWalkRadius;
+	}
+
+	glm::vec3 Terrain::Normal(float x, float z) const
+	{
+		float hL = Height(x - 0.5f, z);
+		float hR = Height(x + 0.5f, z);
+		float hD = Height(x, z - 0.5f);
+		float hU = Height(x, z + 0.5f);
+		const float dhdx = hR - hL;
+		const float dhdz = hU - hD;
+		return glm::normalize(glm::vec3(-dhdx, 1.0f, -dhdz));
 	}
 
 	gfx::MeshData Terrain::BuildMesh(int res) const
@@ -58,20 +95,6 @@ namespace game
 			}
 		}
 		return m;
-	}
-
-	float HeightMapSource::Height(float x, float z) const
-	{
-		float u = (x + kWorldHalfSize) / (kWorldHalfSize * 2);
-		float v = (z + kWorldHalfSize) / (kWorldHalfSize * 2);
-
-		const int ix = static_cast<int>(u * source.width - 1);
-		const int iz = static_cast<int>(v * source.height - 1);
-		if (ix < 0 || ix >= source.width || iz < 0 || iz >= source.height)
-			return 0.0f;
-
-		float pixel = (static_cast<float>(source.data[iz * source.width + ix * 4])) / 255.0f;
-		return pixel * kHeightMapScale;
 	}
 
 } // namespace game

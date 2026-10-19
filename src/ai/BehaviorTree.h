@@ -9,7 +9,7 @@ namespace ai
 	class BehaviorTree
 	{
 	public:
-		void Tick(AIContext &ctx);
+		Node::State Tick(AIContext &ctx);
 
 		void SetRoot(Node *node);
 
@@ -21,10 +21,12 @@ namespace ai
 			return static_cast<T *>(nodes.back().get());
 		}
 
+		void Print(Node *node, int indent = 0);
+
 	private:
 		std::vector<std::unique_ptr<Node>> nodes;
 
-		NodeStatus status = NodeStatus::Running;
+		Node::State status = Node::State::Running;
 
 		Node *root = nullptr;
 	};

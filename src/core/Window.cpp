@@ -20,6 +20,10 @@ namespace core
 				spdlog::error("GL: {}", msg);
 			else if (severity == GL_DEBUG_SEVERITY_MEDIUM)
 				spdlog::warn("GL: {}", msg);
+			else if (severity == GL_DEBUG_SEVERITY_LOW)
+				spdlog::info("GL: {}", msg);
+			else
+				spdlog::debug("GL: {}", msg);
 		}
 
 		Input &InputOf(GLFWwindow *w)
@@ -51,6 +55,7 @@ namespace core
 		if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 			throw std::runtime_error("Failed to load OpenGL");
 		spdlog::info("OpenGL {}", reinterpret_cast<const char *>(glGetString(GL_VERSION)));
+
 		glEnable(GL_DEBUG_OUTPUT);
 		glDebugMessageCallback(OnGlDebug, nullptr);
 

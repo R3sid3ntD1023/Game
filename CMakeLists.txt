@@ -40,6 +40,7 @@ target_compile_definitions(Game PRIVATE
     ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets/"
     # Readable JSON worlds while developing, compact binary worlds in Release.
     $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:GAME_SCENE_JSON=1>
+    $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:_DEVELOPMENT=1>
     $<$<CONFIG:Debug>:GAME_DEBUG=1>
 )
 target_link_libraries(Game PRIVATE
