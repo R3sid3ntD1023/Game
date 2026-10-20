@@ -55,8 +55,6 @@ namespace game
 		float m_damage;
 		float m_attackTimer = 0.0f;
 		float m_stepDistance = 0.0f;
-		float m_wanderTimer = 0.0f;
-		glm::vec3 m_wanderDir{0.0f};
 		float m_aggroRange = 35.0f;
 		float m_attackRange = 3.2f;
 

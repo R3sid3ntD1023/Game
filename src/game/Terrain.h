@@ -1,5 +1,6 @@
 #pragma once
 
+#include "eng/IWorldQuery.h"
 #include "gfx/Mesh.h"
 #include "gfx/Texture.h"
 #include <memory>
@@ -23,14 +24,30 @@ namespace game
 		float Height(float x, float z) const override;
 	};
 
-	struct Terrain
+	struct Terrain : eng::IWorldQuery
 	{
-		static constexpr float kHalfSize = 200.0f;
+		static constexpr float kHalfSize = 350.0f;
 		static constexpr float kIslandRadius = 400.0f;
-		static constexpr float kWalkRadius = 380.0f; // physics keeps bodies inside this circle
+<<<<<<< HEAD
+		static constexpr float kWalkRadius = 350.0f; // physics keeps bodies inside this circle
+		static constexpr float kSeaLevel = 0.0f;
+=======
+		static constexpr float kWalkRadius = 200.0f; // physics keeps bodies inside this circle
 		static constexpr float kSeaLevel = -0.2f;
+>>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 
-		float Height(float x, float z) const;
+		float Height(float x, float z) const override;
+
+		bool IsWalkable(float x, float z) const override;
+
+		glm::vec3 Normal(float x, float z) const override;
+
+		int GetHalfSize() const override { return static_cast<int>(kHalfSize); }
+<<<<<<< HEAD
+
+		float Slope(float x, float z) const override;
+=======
+>>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 
 		gfx::MeshData BuildMesh(int resolution = 320) const;
 

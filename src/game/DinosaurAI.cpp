@@ -1,6 +1,6 @@
-#include "game/DinosaurAI.h"
 #include "ai/Nodes.h"
 #include "eng/World.h"
+#include "game/DinosaurAI.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -19,7 +19,7 @@ namespace game
 		m_animator = gameObject->GetComponent<eng::Animator>();
 
 		m_health->SetOnDamageCallback(
-			[this](float amount)
+			[this](float /*amount*/)
 			{
 				if (m_health->Dead())
 				{
@@ -46,21 +46,25 @@ namespace game
 
 		UpdateAudio(dt);
 		UpdateAnimation();
+
+		m_behaviorTree.Tick(m_aiContext);
 	}
 
-	void DinosaurAI::OnFixedUpdate(float dt)
+	void DinosaurAI::OnFixedUpdate(float /*dt*/)
 	{
 		if (!m_body || (m_health && m_health->Dead()))
 			return;
-
-		m_wanderTimer -= dt;
+<<<<<<< HEAD
+=======
 
 		m_behaviorTree.Tick(m_aiContext);
+>>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 	}
 
 	void DinosaurAI::InitializeBehaviorTree()
 	{
 		m_aiContext.self = gameObject;
+		m_aiContext.blackboard.Add<glm::vec3>("target");
 
 		auto attackCondition = [this](ai::AIContext &ctx)
 		{
@@ -101,7 +105,7 @@ namespace game
 				self.rotation = glm::angleAxis(std::atan2(-dir.z, dir.x), glm::vec3(0, 1, 0));
 			}
 
-			return ai::NodeStatus::Running;
+			return ai::Node::State::Running;
 		};
 
 		auto chaseCondition = [this](ai::AIContext &ctx)
@@ -114,82 +118,102 @@ namespace game
 
 		auto chaseAction = [this](ai::AIContext &ctx)
 		{
+			ctx.blackboard.Set<glm::vec3>("target", m_target.GetTransform().position);
 			SetState(DinosaurState::Chasing);
-
-			auto &self = ctx.self->GetTransform();
-			auto &target = m_target.GetTransform();
-			auto dir = target.position - self.position;
-			dir.y = 0.0f;
-			auto len = glm::length(dir);
-
-			if (len > 0.0f)
-			{
-				dir /= len;
-				self.rotation = glm::angleAxis(std::atan2(-dir.z, dir.x), glm::vec3(0, 1, 0));
-			}
-
-			m_body->velocity.x = dir.x * m_speed;
-			m_body->velocity.z = dir.z * m_speed;
-
-			return ai::NodeStatus::Running;
+			return ai::Node::State::Success;
 		};
 
-		auto wanderAction = [this](ai::AIContext &ctx)
-		{
-			SetState(DinosaurState::Wandering);
+		auto root = m_behaviorTree.AddNode<ai::Root>();
+		root->SetName("Root");
 
-			auto &self = ctx.self->GetTransform();
+		auto prioritySelector = m_behaviorTree.AddNode<ai::Selector>();
+		prioritySelector->SetName("PrioritySelector");
 
-			if (m_wanderTimer <= 0.0f)
-			{
-				const float a = static_cast<float>(std::rand() % 628) / 100.0f;
-				m_wanderDir = (std::rand() % 3 == 0) ? glm::vec3(0.0f) : glm::vec3(std::cos(a), 0.0f, std::sin(a));
-				m_wanderTimer = 2.0f + static_cast<float>(std::rand() % 300) / 100.0f;
-			}
-
-			m_body->velocity.x = m_wanderDir.x * m_speed * 0.3f;
-			m_body->velocity.z = m_wanderDir.z * m_speed * 0.3f;
-
-			if (glm::dot(m_wanderDir, m_wanderDir) > 0.0f)
-				self.rotation = glm::angleAxis(std::atan2(-m_wanderDir.z, m_wanderDir.x), glm::vec3(0, 1, 0));
-
-			return ai::NodeStatus::Running;
-		};
-
-		auto root = m_behaviorTree.AddNode<ai::Selector>();
 		// attack sequence
 		auto attackRange = m_behaviorTree.AddNode<ai::Conditional>();
+		attackRange->SetName("AttackRange");
 		attackRange->SetCondition(attackCondition);
 
 		auto attack = m_behaviorTree.AddNode<ai::Action>();
+		attack->SetName("Attack");
 		attack->SetAction(attackAction);
 
 		auto attackSequence = m_behaviorTree.AddNode<ai::Sequence>();
-		attackSequence->AddChild(attackRange);
-		attackSequence->AddChild(attack);
+		attackSequence->SetName("AttackSequence");
 
 		// chase behavior
 
 		auto chaseRange = m_behaviorTree.AddNode<ai::Conditional>();
+		chaseRange->SetName("ChaseRange");
 		chaseRange->SetCondition(chaseCondition);
 
 		auto chase = m_behaviorTree.AddNode<ai::Action>();
+		chase->SetName("Chase");
 		chase->SetAction(chaseAction);
 
-		// chase->SetAction(chaseAction); already set above
+		auto chaseTo = m_behaviorTree.AddNode<ai::MoveTo>();
+		chaseTo->SetName("ChaseTo");
+		chaseTo->m_target = "target";
+		chaseTo->m_speed = m_speed;
 
 		auto chaseSequence = m_behaviorTree.AddNode<ai::Sequence>();
+		chaseSequence->SetName("ChaseSequence");
+
+		auto notHasTarget = m_behaviorTree.AddNode<ai::Conditional>();
+		notHasTarget->SetName("NotHasTarget");
+		notHasTarget->SetCondition([this](ai::AIContext &ctx) { return !ctx.blackboard.IsSet("target"); });
+
+		auto wanderSequence = m_behaviorTree.AddNode<ai::Sequence>();
+		wanderSequence->SetName("WanderSequence");
+
+		auto wanderTo = m_behaviorTree.AddNode<ai::MoveTo>();
+		wanderTo->SetName("WanderTo");
+		wanderTo->m_target = "target";
+		wanderTo->m_speed = m_speed * 0.3f;
+
+		auto wanderAction = m_behaviorTree.AddNode<ai::Action>();
+		wanderAction->SetName("WanderAction");
+		wanderAction->SetAction(
+			[this](ai::AIContext & /*ctx*/)
+			{
+				SetState(DinosaurState::Wandering);
+				return ai::Node::State::Success;
+			}
+		);
+
+		auto findPoint = m_behaviorTree.AddNode<ai::FindRandomReachablePoint>();
+		findPoint->SetName("FindPoint");
+		findPoint->m_target = "target";
+
+		auto findPointSelector = m_behaviorTree.AddNode<ai::Selector>();
+		findPointSelector->SetName("FindPointSelector");
+
+		auto findPointSequence = m_behaviorTree.AddNode<ai::Sequence>();
+		findPointSequence->SetName("FindPointSequence");
+
+		findPointSequence->AddChild(notHasTarget);
+		findPointSequence->AddChild(findPoint);
+
+		wanderSequence->AddChild(wanderAction);
+		wanderSequence->AddChild(wanderTo);
+
+		findPointSelector->AddChild(findPointSequence);
+		findPointSelector->AddChild(wanderSequence);
+
+		attackSequence->AddChild(attackRange);
+		attackSequence->AddChild(attack);
+
 		chaseSequence->AddChild(chaseRange);
 		chaseSequence->AddChild(chase);
+		chaseSequence->AddChild(chaseTo);
 
-		// wander behavior
-		auto wander = m_behaviorTree.AddNode<ai::Action>();
-		wander->SetAction(wanderAction);
+		prioritySelector->AddChild(findPointSelector);
+		// prioritySelector->AddChild(attackSequence);
+		// prioritySelector->AddChild(chaseSequence);
+		root->SetChild(prioritySelector);
 
-		root->AddChild(attackSequence);
-		root->AddChild(chaseSequence);
-		root->AddChild(wander);
 		m_behaviorTree.SetRoot(root);
+		m_behaviorTree.Print(root);
 	}
 
 	void DinosaurAI::UpdateAudio(float dt)

@@ -2,6 +2,7 @@
 
 #include <any>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -12,9 +13,9 @@ namespace ai
 	{
 	public:
 		template <typename T>
-		void Add(std::string_view key, const T &value)
+		void Add(std::string_view key)
 		{
-			data[std::string(key)] = std::any(value);
+			data[std::string(key)].reset();
 		}
 
 		template <typename T>
@@ -26,12 +27,18 @@ namespace ai
 				throw std::runtime_error("Key not found");
 		}
 
+		void Clear(std::string_view key)
+		{
+			if (data.contains(std::string(key)))
+				data[std::string(key)].reset();
+		}
+
 		template <typename T>
 		T &Get(std::string_view key)
 		{
-			if (Has<T>(key))
+			if (Has<T>(key) && data.at(std::string(key)).has_value())
 			{
-				return std::any_cast<T &>(data.at(std::string(key)));
+				return std::any_cast<T &>(data.at(std::string(key)).value());
 			}
 			throw std::runtime_error("Key not found or type mismatch");
 		}
@@ -39,12 +46,14 @@ namespace ai
 		template <typename T>
 		const T &Get(std::string_view key) const
 		{
-			if (Has<T>(key))
+			if (Has<T>(key) && data.at(std::string(key)).has_value())
 			{
-				return std::any_cast<const T &>(data.at(std::string(key)));
+				return std::any_cast<const T &>(data.at(std::string(key)).value());
 			}
 			throw std::runtime_error("Key not found or type mismatch");
 		}
+
+		bool IsSet(std::string_view key) const { return data.contains(std::string(key)) && data.at(std::string(key)).has_value(); }
 
 		template <typename T>
 		bool Has(std::string_view key) const
@@ -55,6 +64,6 @@ namespace ai
 		void Remove(std::string_view key) { data.erase(std::string(key)); }
 
 	private:
-		std::unordered_map<std::string, std::any> data;
+		std::unordered_map<std::string, std::optional<std::any>> data;
 	};
 } // namespace ai

@@ -9,6 +9,20 @@ namespace eng
 	World::World()
 		: m_renderer(m_meshes)
 	{
+		static float scale = 10.0f;
+		static gfx::Line axes[3]
+			= {{{0.0f, 0.0f, 0.0f}, {scale, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+			   {{0.0f, 0.0f, 0.0f}, {0.0f, scale, 0.0f}, {0.0f, 1.0f, 0.0f}},
+			   {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, scale}, {0.0f, 0.0f, 1.0f}}};
+
+		m_lineRenderer.DrawPersistentLine(
+			{[this](gfx::LineRenderer &lr)
+			 {
+				 for (const auto &line : axes)
+					 lr.DrawLine(line);
+			 },
+			 -1.0f}
+		);
 	}
 
 	World::~World()
@@ -64,6 +78,8 @@ namespace eng
 
 	void World::Update(float dt, const gfx::Camera &camera)
 	{
+		m_deltaTime = dt;
+
 		for (size_t i = 0; i < m_objects.size(); ++i)
 			m_objects[i]->Update(dt);
 
@@ -143,6 +159,55 @@ namespace eng
 		for (ParticleEmitter *e : m_emitters)
 			e->Collect(m_particleRenderer);
 		m_particleRenderer.Render(view, proj, camera.position);
+
+		m_lineRenderer.Begin(m_deltaTime);
+		m_lineRenderer.Render(viewProj);
+	}
+
+	void World::SetWorldQuery(IWorldQuery *query)
+	{
+		m_worldQuery = query;
+		if (m_worldQuery)
+<<<<<<< HEAD
+			m_navigationGrid.Initialize(75, 75, 10.0f, *m_worldQuery);
+
+		m_lineRenderer.DrawPersistentLine({[this](gfx::LineRenderer &lr) { lr.DrawNavigationGrid(m_navigationGrid); }, -1.0f});
+=======
+			m_navigationGrid.Initialize(600, 600, 1.0f, *m_worldQuery);
+
+		// m_lineRenderer.DrawPersistentLine({[this](gfx::LineRenderer &lr) { lr.DrawNavigationGrid(m_navigationGrid); }, -1.0f});
+>>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
+	}
+
+	float World::GetTerrainHeight(float x, float z) const
+	{
+		return m_worldQuery ? m_worldQuery->Height(x, z) : 0.0f;
+	}
+
+	bool World::IsWalkable(float x, float z) const
+	{
+		return m_worldQuery ? m_worldQuery->IsWalkable(x, z) : true;
+	}
+
+	bool World::FindRandomReachablePoint(glm::vec3 &out, const glm::vec3 &center, float radius) const
+	{
+		std::random_device rd;
+		std::mt19937 gen(rd());
+		std::uniform_real_distribution<float> distX(center.x - radius, center.x + radius);
+		std::uniform_real_distribution<float> distZ(center.z - radius, center.z + radius);
+
+		const int maxAttempts = 100;
+		for (int attempt = 0; attempt < maxAttempts; ++attempt)
+		{
+			float x = distX(gen);
+			float z = distZ(gen);
+			if (IsWalkable(x, z))
+			{
+				out = glm::vec3(x, GetTerrainHeight(x, z), z);
+				return true;
+			}
+		}
+		return false;
 	}
 
 } // namespace eng

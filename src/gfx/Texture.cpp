@@ -65,6 +65,7 @@ namespace gfx
 			stbi_image_free(img);
 			tex.width = w;
 			tex.height = h;
+			tex.channels = 4;
 		}
 		return tex;
 	}

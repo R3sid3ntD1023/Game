@@ -26,10 +26,16 @@ namespace game
 
 	struct IslandParams
 	{
-		int trees = 400;
-		int ferns = 1400;
-		int rocks = 90;
-		int raptors = 30;
+<<<<<<< HEAD
+		int trees = 0;
+		int ferns = 0;
+		int rocks = 0;
+=======
+		int trees = 100;
+		int ferns = 50;
+		int rocks = 20;
+>>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
+		int raptors = 10;
 		int buildings = 10;
 		int posts = 24;
 	};

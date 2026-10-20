@@ -143,9 +143,9 @@ void main() {
 
     vec3 color = ambient + Lo + uEmissive * vEmissiveScale;
 
-    float fog = 1.0 - exp(-length(uCameraPos - fs.worldPos) * FOG_DENSITY);
-    vec3 fogColor = FOG_FLOOR + textureLod(uPrefilterMap, normalize(vec3(-V.x, 0.05, -V.z)), MAX_REFLECTION_LOD).rgb;
-    color = mix(color, fogColor, clamp(fog, 0.0, 1.0));
+    // float fog = 1.0 - exp(-length(uCameraPos - fs.worldPos) * FOG_DENSITY);
+    // vec3 fogColor = FOG_FLOOR + textureLod(uPrefilterMap, normalize(vec3(-V.x, 0.05, -V.z)), MAX_REFLECTION_LOD).rgb;
+    // color = mix(color, fogColor, clamp(fog, 0.0, 1.0));
 
     // Linear HDR output; tone mapping happens in the composite pass.
     outColor = vec4(color, albedoSample.a);
