@@ -9,11 +9,7 @@ namespace game
 	static constexpr float kWalkRadius = Terrain::kWalkRadius;
 	static constexpr float kSeaLevel = Terrain::kSeaLevel;
 	static constexpr float kHeightMapScale = 20.f;
-<<<<<<< HEAD
 	static constexpr float kMaxSlope = 75.0f;
-=======
-	static constexpr float kMaxSlope = 0.75f;
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 
 	float ProceduralHeightSource::Height(float x, float z) const
 	{
@@ -45,7 +41,6 @@ namespace game
 		return (pixel - 0.5f) * 2.0f * kHeightMapScale;
 	}
 
-<<<<<<< HEAD
 	float Terrain::Slope(float x, float z) const
 	{
 		auto n = Normal(x, z);
@@ -53,8 +48,6 @@ namespace game
 		return glm::degrees(glm::acos(ndotu));
 	}
 
-=======
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 	float Terrain::Height(float x, float z) const
 	{
 		if (heightSource)
@@ -67,22 +60,13 @@ namespace game
 	{
 		auto n = Normal(x, z);
 		auto h = Height(x, z);
-<<<<<<< HEAD
 		auto slope = Slope(x, z);
 
 		bool withinWalkRadius = std::abs(x) < kWalkRadius && std::abs(z) < kWalkRadius;
 		bool aboveSeaLevel = h > kSeaLevel;
 		bool slopeOk = slope <= kMaxSlope;
 
-		if (h < kSeaLevel)
-		{
-			return false;
-		}
-
 		return slopeOk && aboveSeaLevel && withinWalkRadius;
-=======
-		return n.y >= kMaxSlope && h > kSeaLevel && x < kWalkRadius && z < kWalkRadius;
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 	}
 
 	glm::vec3 Terrain::Normal(float x, float z) const

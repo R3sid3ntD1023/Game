@@ -28,13 +28,8 @@ namespace game
 	{
 		static constexpr float kHalfSize = 350.0f;
 		static constexpr float kIslandRadius = 400.0f;
-<<<<<<< HEAD
-		static constexpr float kWalkRadius = 350.0f; // physics keeps bodies inside this circle
-		static constexpr float kSeaLevel = 0.0f;
-=======
 		static constexpr float kWalkRadius = 200.0f; // physics keeps bodies inside this circle
-		static constexpr float kSeaLevel = -0.2f;
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
+		static constexpr float kSeaLevel = -.5f;
 
 		float Height(float x, float z) const override;
 
@@ -43,11 +38,8 @@ namespace game
 		glm::vec3 Normal(float x, float z) const override;
 
 		int GetHalfSize() const override { return static_cast<int>(kHalfSize); }
-<<<<<<< HEAD
 
 		float Slope(float x, float z) const override;
-=======
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 
 		gfx::MeshData BuildMesh(int resolution = 320) const;
 

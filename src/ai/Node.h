@@ -49,7 +49,6 @@ namespace ai
 				m_started = true;
 			}
 
-<<<<<<< HEAD
 			m_state = OnExecute(ctx);
 
 			if (m_state != State::Running)
@@ -63,17 +62,6 @@ namespace ai
 		void Reset() { m_state = State::Running; }
 
 		State GetState() { return m_state; }
-=======
-			auto status = OnExecute(ctx);
-
-			if (status != State::Running)
-				m_started = false;
-
-			return status;
-		}
-
-		virtual void OnStart(AIContext &ctx) {}
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 
 		virtual State OnExecute(AIContext &ctx) = 0;
 
@@ -81,10 +69,7 @@ namespace ai
 
 	private:
 		std::string m_name = "Node";
-<<<<<<< HEAD
 		State m_state = State::Running;
-=======
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 		bool m_started = false;
 	};
 

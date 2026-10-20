@@ -15,15 +15,9 @@ namespace ai
 
 		status = root->Execute(ctx);
 
-<<<<<<< HEAD
 		if (status == Node::State::Failure || status == Node::State::Success)
 		{
 			root->Reset();
-=======
-		if (status == Node::State::Running)
-		{
-			return Node::State::Running;
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 		}
 
 		return status;

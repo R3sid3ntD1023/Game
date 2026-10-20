@@ -14,7 +14,6 @@ namespace eng
 		{
 			for (int x = 0; x < width; ++x)
 			{
-<<<<<<< HEAD
 
 				glm::vec3 worldPos = GridToWorld(x, y);
 
@@ -23,12 +22,6 @@ namespace eng
 				currentCell.walkable = this->query->IsWalkable(worldPos.x, worldPos.z);
 				currentCell.height = this->query->Height(worldPos.x, worldPos.z);
 				currentCell.slope = this->query->Slope(worldPos.x, worldPos.z);
-=======
-				int index = y * width + x;
-				float wx = float(x);
-				float wz = float(y);
-				this->cells[index].walkable = this->query->IsWalkable(wx, wz);
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 			}
 		}
 	}
@@ -53,7 +46,6 @@ namespace eng
 
 		return worldPos;
 	}
-<<<<<<< HEAD
 
 	bool NavigationGrid::IsValid(int x, int y) const
 	{
@@ -68,6 +60,4 @@ namespace eng
 		int index = y * width + x;
 		return cells[index].walkable;
 	}
-=======
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 } // namespace eng

@@ -81,7 +81,6 @@ namespace ai
 		auto query = world.Query();
 		auto &m_grid = world.NavigationGrid();
 
-<<<<<<< HEAD
 		if (!m_path.empty())
 		{
 			m_currentNodeIndex = -1;
@@ -112,17 +111,6 @@ namespace ai
 				gfx::Line line(worldPos, nextWorldPos, glm::vec3(1, 0, 0));
 				world.Lines().DrawPersistentLine({[line](gfx::LineRenderer &lr) { lr.DrawLine(line); }, 100.f});
 			}
-=======
-		if (query)
-		{
-			eng::PathFinder m_pathFinder(world.NavigationGrid(), *query);
-			auto start = m_grid.WorldToGrid(transform.position);
-			auto end = m_grid.WorldToGrid(target);
-
-			m_path = m_pathFinder.FindPath(start, end);
-			if (!m_path.empty())
-				m_currentNode = &m_path.front();
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 		}
 	}
 
@@ -132,7 +120,7 @@ namespace ai
 		auto body = ctx.self->GetComponent<eng::RigidBody>();
 		auto &transform = ctx.self->GetTransform();
 		auto &world = ctx.self->GetWorld();
-<<<<<<< HEAD
+
 		auto &grid = world.NavigationGrid();
 
 		glm::vec3 moveTarget = target;
@@ -154,57 +142,24 @@ namespace ai
 		{
 			++m_currentNodeIndex;
 
-			// if (m_currentNodeIndex >= int(m_path.size()))
-			// {
-			// 	body->velocity.x = 0.0f;
-			// 	body->velocity.z = 0.0f;
+			if (m_currentNodeIndex >= int(m_path.size()))
+			{
+				body->velocity.x = 0.0f;
+				body->velocity.z = 0.0f;
 
-			// 	ctx.blackboard.Clear(m_target);
-			// 	m_currentNodeIndex = -1;
-			// 	m_path.clear();
-			// 	return ai::Node::State::Success;
-			// }
+				ctx.blackboard.Clear(m_target);
+				m_currentNodeIndex = -1;
+				m_path.clear();
+				return ai::Node::State::Success;
+			}
 
-			// const auto &nextGridPos = m_path[m_currentNodeIndex];
-			// moveTarget = grid.GridToWorld(nextGridPos.x, nextGridPos.y);
-			// waypointRadius = grid.cellSize * 0.5f;
+			const auto &nextGridPos = m_path[m_currentNodeIndex];
+			moveTarget = grid.GridToWorld(nextGridPos.x, nextGridPos.y);
+			waypointRadius = grid.cellSize * 0.5f;
 
-			// dir = moveTarget - transform.position;
-			// dir.y = 0.0f;
-			// distance = glm::length(dir);
-		}
-		if (m_currentNodeIndex >= int(m_path.size()))
-		{
-			body->velocity.x = 0.0f;
-			body->velocity.z = 0.0f;
-
-			ctx.blackboard.Clear(m_target);
-			m_currentNodeIndex = -1;
-=======
-
-		if (m_currentNode && m_currentNode->parent)
-		{
-			m_currentNode = m_currentNode->parent;
-
-			auto worldPos = world.NavigationGrid().GridToWorld(m_currentNode->gridPos.x, m_currentNode->gridPos.y);
-		}
-
-		auto dir = target - transform.position;
-		dir.y = 0.0f;
-
-		float distance = glm::length(dir);
-		// spdlog::info("Distance to target: {}", distance);
-
-		// Implement movement logic here
-		if (distance < m_stopDistance + body->halfExtents.x)
-		{
-			body->velocity.x = 0.0f;
-			body->velocity.z = 0.0f;
-			ctx.blackboard.Clear(m_target);
-			m_currentNode = nullptr;
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
-			m_path.clear();
-			return ai::Node::State::Success;
+			dir = moveTarget - transform.position;
+			dir.y = 0.0f;
+			distance = glm::length(dir);
 		}
 
 		dir /= distance;

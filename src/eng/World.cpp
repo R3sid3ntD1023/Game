@@ -168,15 +168,10 @@ namespace eng
 	{
 		m_worldQuery = query;
 		if (m_worldQuery)
-<<<<<<< HEAD
+		{
 			m_navigationGrid.Initialize(75, 75, 10.0f, *m_worldQuery);
-
-		m_lineRenderer.DrawPersistentLine({[this](gfx::LineRenderer &lr) { lr.DrawNavigationGrid(m_navigationGrid); }, -1.0f});
-=======
-			m_navigationGrid.Initialize(600, 600, 1.0f, *m_worldQuery);
-
-		// m_lineRenderer.DrawPersistentLine({[this](gfx::LineRenderer &lr) { lr.DrawNavigationGrid(m_navigationGrid); }, -1.0f});
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
+			m_lineRenderer.DrawPersistentLine({[this](gfx::LineRenderer &lr) { lr.DrawNavigationGrid(m_navigationGrid); }, -1.0f});
+		}
 	}
 
 	float World::GetTerrainHeight(float x, float z) const

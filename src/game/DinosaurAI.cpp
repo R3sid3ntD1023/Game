@@ -1,6 +1,6 @@
+#include "game/DinosaurAI.h"
 #include "ai/Nodes.h"
 #include "eng/World.h"
-#include "game/DinosaurAI.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -46,19 +46,14 @@ namespace game
 
 		UpdateAudio(dt);
 		UpdateAnimation();
-
-		m_behaviorTree.Tick(m_aiContext);
 	}
 
 	void DinosaurAI::OnFixedUpdate(float /*dt*/)
 	{
 		if (!m_body || (m_health && m_health->Dead()))
 			return;
-<<<<<<< HEAD
-=======
 
 		m_behaviorTree.Tick(m_aiContext);
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 	}
 
 	void DinosaurAI::InitializeBehaviorTree()

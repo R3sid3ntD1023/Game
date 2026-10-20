@@ -115,13 +115,8 @@ namespace ai
 		ai::Node::State OnExecute(ai::AIContext &ctx) override;
 
 	private:
-<<<<<<< HEAD
 		eng::PathFinder::Path m_path;
 		int m_currentNodeIndex = -1;
-=======
-		std::deque<eng::PathFinder::Node> m_path;
-		eng::PathFinder::Node *m_currentNode = nullptr;
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 	};
 
 	struct FindRandomReachablePoint : public ai::Node

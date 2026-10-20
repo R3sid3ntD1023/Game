@@ -31,20 +31,14 @@ namespace gfx
 		{
 			line.func(*this);
 
-<<<<<<< HEAD
 			if (line.duration != -1.0)
-=======
-			if (line.duration != -1.0f)
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 			{
 				if (line.duration > 0.0f)
 				{
 					line.duration -= dt;
-<<<<<<< HEAD
+
 					if (line.duration <= 0.0f)
 						line.duration = 0.0f;
-=======
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 				}
 			}
 		}
@@ -108,11 +102,8 @@ namespace gfx
 
 	void LineRenderer::DrawPersistentLine(const PersistentLine &line)
 	{
-<<<<<<< HEAD
+
 		m_persistentLines.push_back(std::move(line));
-=======
-		m_persistentLines.push_back(line);
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 	}
 
 	void LineRenderer::DrawPoint(const Point &point)
@@ -137,7 +128,6 @@ namespace gfx
 			{
 
 				glm::vec3 p0 = grid.GridToWorld(x, y);
-<<<<<<< HEAD
 				glm::vec3 p1 = grid.GridToWorld(x, y + 1);
 				glm::vec3 p2 = grid.GridToWorld(x + 1, y);
 				glm::vec3 col = grid.IsWalkable(x, y) ? glm::vec3(0.3f, 1.0f, 0.3f) : glm::vec3(1.0f, 0.0f, 0.0f);
@@ -146,13 +136,6 @@ namespace gfx
 
 				DrawLine({p0, p1, col});
 				DrawLine({p0, p2, col});
-=======
-				glm::vec3 col = grid.query->IsWalkable(p0.x, p0.z) ? glm::vec3(0.3f, 1.0f, 0.3f) : glm::vec3(1.0f, 0.0f, 0.0f);
-
-				p0.y += 0.2f; // Slightly elevate the line to avoid z-fighting with the grid
-
-				DrawPoint({p0, col});
->>>>>>> f68a28ca91c449c2a958af4570e2161e14e30d3a
 			}
 	}
 
