@@ -135,6 +135,7 @@ namespace game
         return skeleton;
     }
 
+    // `blend`: 0 idle .. 1 run, and 0 .. -1 fades into a curled-up sleeping pose.
     void RaptorPose(float time, float blend, std::vector<glm::mat4> &L)
     {
         if (L.size() < BoneCount)
@@ -145,16 +146,20 @@ namespace game
         auto rotY = [&](int b, float a)
         { L[b] = L[b] * glm::rotate(glm::mat4(1.0f), a, axisY); };
 
+        const float sleep = glm::clamp(-blend, 0.0f, 1.0f);
+        const float awake = 1.0f - sleep;
+        blend = glm::max(blend, 0.0f);
+
         const float ph = time * 6.0f;
-        const float s = std::sin(ph);
+        const float s = std::sin(ph) * awake;
         const float amp = 0.2f + 0.7f * blend;
         const float kneeBend = 0.3f + 0.5f * blend;
 
         // Legs alternate; the knee flexes while the leg swings forward.
         rotZ(ThighL, amp * s);
         rotZ(ThighR, -amp * s);
-        rotZ(ShinL, -kneeBend * (0.5f + 0.5f * std::sin(ph + 1.2f)));
-        rotZ(ShinR, -kneeBend * (0.5f + 0.5f * std::sin(ph + 1.2f + 3.14159f)));
+        rotZ(ShinL, -kneeBend * (0.5f + 0.5f * std::sin(ph + 1.2f)) * awake);
+        rotZ(ShinR, -kneeBend * (0.5f + 0.5f * std::sin(ph + 1.2f + 3.14159f)) * awake);
         rotZ(FootL, 0.3f * amp * s);
         rotZ(FootR, -0.3f * amp * s);
 
@@ -165,13 +170,36 @@ namespace game
         rotZ(Neck, 0.1f * blend + 0.03f * std::sin(time * 2.0f + 0.5f));
         rotZ(Head, -0.1f * blend * std::sin(2.0f * ph + 0.6f));
 
-        const float sway = 0.3f + blend;
+        const float sway = (0.3f + blend) * awake;
         rotY(Tail1, 0.15f * sway * std::sin(ph * 0.5f));
         rotY(Tail2, 0.2f * sway * std::sin(ph * 0.5f - 0.8f));
         rotY(Tail3, 0.25f * sway * std::sin(ph * 0.5f - 1.6f));
 
         rotZ(ArmL, 0.3f * s);
         rotZ(ArmR, -0.3f * s);
+
+        if (sleep > 0.0f)
+        {
+            // Lie down on the belly: legs folded under the body, head resting low, tail curled to one side.
+            const float breath = std::sin(time * 1.4f);
+            L[Hips] = glm::translate(glm::mat4(1.0f), {0.0f, -0.55f * sleep + 0.012f * breath * sleep, 0.0f}) * L[Hips];
+            rotZ(ThighL, 1.25f * sleep);
+            rotZ(ThighR, 1.25f * sleep);
+            rotZ(ShinL, -2.3f * sleep);
+            rotZ(ShinR, -2.3f * sleep);
+            rotZ(FootL, 1.0f * sleep);
+            rotZ(FootR, 1.0f * sleep);
+            rotZ(Hips, 0.05f * sleep);
+            rotZ(Spine, (-0.1f + 0.015f * breath) * sleep);
+            rotZ(Neck, -0.55f * sleep);
+            rotZ(Head, -0.35f * sleep);
+            rotY(Neck, 0.25f * sleep);
+            rotY(Tail1, 0.5f * sleep);
+            rotY(Tail2, 0.6f * sleep);
+            rotY(Tail3, 0.5f * sleep);
+            rotZ(ArmL, 0.6f * sleep);
+            rotZ(ArmR, 0.6f * sleep);
+        }
     }
 
 } // namespace game

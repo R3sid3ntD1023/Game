@@ -189,6 +189,21 @@ namespace gfx
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     }
 
+    void RenderSystem::SetShoreMap(const std::vector<float> &heights, int size, const glm::vec2 &center, float extent)
+    {
+        if (m_shoreTex)
+            glDeleteTextures(1, &m_shoreTex);
+        glCreateTextures(GL_TEXTURE_2D, 1, &m_shoreTex);
+        glTextureStorage2D(m_shoreTex, 1, GL_R16F, size, size);
+        glTextureSubImage2D(m_shoreTex, 0, 0, 0, size, size, GL_RED, GL_FLOAT, heights.data());
+        glTextureParameteri(m_shoreTex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(m_shoreTex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTextureParameteri(m_shoreTex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(m_shoreTex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        m_shoreCenter = center;
+        m_shoreExtent = extent;
+    }
+
     void RenderSystem::ShadePass(const glm::mat4 &viewProj, const glm::vec3 &cameraPos, int tileCountX)
     {
         if (m_commands.empty())
@@ -197,6 +212,8 @@ namespace gfx
 
         glDepthFunc(GL_LEQUAL); // the prepass already wrote depth
         glDepthMask(GL_FALSE);
+        if (m_shoreTex)
+            glBindTextureUnit(9, m_shoreTex);
         const bool cullWasOn = glIsEnabled(GL_CULL_FACE) == GL_TRUE;
         const Shader *bound = nullptr;
         for (const Batch &b : m_batches)
@@ -213,6 +230,9 @@ namespace gfx
                 shader->SetInt("uTileCountX", tileCountX);
                 shader->SetFloat("uTime", m_time);
                 shader->SetVec2("uWindDir", m_windDir);
+                shader->SetFloat("uWetness", m_wetness);
+                shader->SetVec2("uShoreCenter", m_shoreCenter);
+                shader->SetFloat("uShoreExtent", m_shoreExtent);
             }
             b.material->Bind();
             glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT,

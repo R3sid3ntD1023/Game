@@ -24,6 +24,10 @@ uniform float uRoughness;
 uniform float uAO;
 uniform vec3 uEmissive;
 uniform vec3 uCameraPos;
+uniform float uWetness; // 0 dry .. 1 soaked by rain
+uniform vec2 uShoreCenter;
+uniform float uShoreExtent;
+layout(binding = 9) uniform sampler2D uShoreMap; // terrain height around the island (metres)
 // Surface description a material shader fills in; the pipeline lights it.
 struct Surface {
     vec3 albedo;
@@ -202,6 +206,9 @@ vec3 EvaluateLight(Light light, vec3 N, vec3 V, float NdotV, vec3 F0, vec3 albed
     return Shade(L, light.colorType.rgb * attenuation, N, V, NdotV, F0, albedo, metallic, roughness);
 }
 
+// A material may add light of its own (e.g. the underside of the sea showing the sky through the surface).
+vec3 gSurfaceEmission = vec3(0.0);
+
 void main() {
     Surface s = GetSurface();
     if (s.alpha < uAlphaCutoff)
@@ -211,6 +218,12 @@ void main() {
     float metallic = clamp(s.metallic, 0.0, 1.0);
 
     vec3 N = s.normal;
+#ifndef NO_WETNESS
+    // Rain: wet surfaces are darker and glossier, most visibly on upward-facing faces.
+    float wet = uWetness * mix(0.6, 1.0, smoothstep(0.2, 0.9, N.y));
+    albedo *= mix(1.0, 0.6, wet * (1.0 - metallic));
+    roughness = mix(roughness, roughness * 0.3 + 0.04, wet);
+#endif
     vec3 V = normalize(uCameraPos - fs.worldPos);
     float NdotV = max(dot(N, V), 1e-4);
 
@@ -234,7 +247,7 @@ void main() {
     vec2 envBrdf = texture(uBrdfLut, vec2(NdotV, roughness)).rg;
     vec3 ambient = (kD * irradiance * albedo + prefiltered * (kS * envBrdf.x + envBrdf.y)) * uAO;
 
-    vec3 color = ambient + Lo + uEmissive * vEmissiveScale;
+    vec3 color = ambient + Lo + uEmissive * vEmissiveScale + gSurfaceEmission;
 
     // float fog = 1.0 - exp(-length(uCameraPos - fs.worldPos) * FOG_DENSITY);
     // vec3 fogColor = FOG_FLOOR + textureLod(uPrefilterMap, normalize(vec3(-V.x, 0.05, -V.z)), MAX_REFLECTION_LOD).rgb;

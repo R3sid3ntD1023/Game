@@ -3,6 +3,7 @@
 #include "audio/Wav.h"
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <spdlog/spdlog.h>
 
@@ -79,6 +80,24 @@ namespace audio
         }
 
         m_ok = true;
+
+        if (alcIsExtensionPresent(m_device, "ALC_EXT_EFX"))
+        {
+            auto genFilters = reinterpret_cast<LPALGENFILTERS>(alGetProcAddress("alGenFilters"));
+            m_alFilteri = reinterpret_cast<LPALFILTERI>(alGetProcAddress("alFilteri"));
+            m_alFilterf = reinterpret_cast<LPALFILTERF>(alGetProcAddress("alFilterf"));
+            if (genFilters && m_alFilteri && m_alFilterf)
+            {
+                alGetError();
+                genFilters(1, &m_lowPass);
+                if (alGetError() != AL_NO_ERROR)
+                    m_lowPass = 0;
+                else
+                    m_alFilteri(m_lowPass, AL_FILTER_TYPE, AL_FILTER_LOWPASS);
+            }
+        }
+        if (!m_lowPass)
+            spdlog::warn("OpenAL EFX is unavailable; underwater muffling will only lower the volume");
         spdlog::info("Audio: {} sounds, {} sources ({})", m_buffers.size(), m_all.size(), alcGetString(m_device, ALC_DEVICE_SPECIFIER));
     }
 
@@ -93,6 +112,9 @@ namespace audio
         }
         for (auto &[name, b] : m_buffers)
             alDeleteBuffers(1, &b);
+        if (m_lowPass)
+            if (auto del = reinterpret_cast<LPALDELETEFILTERS>(alGetProcAddress("alDeleteFilters")))
+                del(1, &m_lowPass);
         alcMakeContextCurrent(nullptr);
         alcDestroyContext(m_context);
         alcCloseDevice(m_device);
@@ -105,6 +127,24 @@ namespace audio
         alListener3f(AL_POSITION, position.x, position.y, position.z);
         const float orientation[6] = {forward.x, forward.y, forward.z, up.x, up.y, up.z};
         alListenerfv(AL_ORIENTATION, orientation);
+    }
+
+    void AudioEngine::SetMuffle(float amount)
+    {
+        amount = std::clamp(amount, 0.0f, 1.0f);
+        if (!m_ok || std::abs(amount - m_muffle) < 0.01f)
+            return;
+        m_muffle = amount;
+        if (!m_lowPass)
+        {
+            alListenerf(AL_GAIN, 1.0f - 0.5f * amount);
+            return;
+        }
+        // Keep the lows, strip the highs; the overall level drops a little as well.
+        m_alFilterf(m_lowPass, AL_LOWPASS_GAIN, 1.0f - 0.25f * amount);
+        m_alFilterf(m_lowPass, AL_LOWPASS_GAINHF, 1.0f - 0.95f * amount);
+        for (ALuint s : m_all)
+            alSourcei(s, AL_DIRECT_FILTER, static_cast<ALint>(m_lowPass)); // re-attach so the new values take effect
     }
 
     void AudioEngine::SetMasterVolume(float volume)
@@ -124,6 +164,7 @@ namespace audio
         alSourcef(s, AL_REFERENCE_DISTANCE, 4.0f);
         alSourcef(s, AL_MAX_DISTANCE, 80.0f);
         alSourcef(s, AL_ROLLOFF_FACTOR, 1.5f);
+        alSourcei(s, AL_DIRECT_FILTER, m_muffle > 0.0f ? static_cast<ALint>(m_lowPass) : AL_FILTER_NULL);
         alSource3f(s, AL_POSITION, 0.0f, 0.0f, 0.0f);
     }
 

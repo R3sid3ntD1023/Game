@@ -62,6 +62,8 @@ namespace game
 		for (int v = 0; v < kGrassVariants; ++v)
 			grassMesh[v] = s.AddMesh({"grass", kMeshGrass, {static_cast<float>(500 + v)}});
 		const int water = s.AddMaterial({"sea", {0.01f, 0.04f, 0.07f}, 0.0f, 0.05f, {}});
+		s.materials[water].shader = "Ocean"; // procedural waves, foam and shallow-water tint
+		s.materials[water].doubleSided = true; // the underside is drawn as seen from below
 		// const int bark = s.AddMaterial({"bark", {0.16f, 0.11f, 0.08f}, 0.0f, 0.9f, {}});
 		const int leaves = s.AddMaterial({"leaves", {0.05f, 0.16f, 0.05f}, 0.0f, 0.75f, {}});
 		const int fern = s.AddMaterial({"fern", {0.08f, 0.22f, 0.06f}, 0.0f, 0.8f, {}});

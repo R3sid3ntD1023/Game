@@ -25,6 +25,11 @@ public:
     float vignette = 0.6f;
     float grain = 0.035f;
     float time = 0.0f; // seconds; drives film grain
+    // Underwater look: 0 = above water, 1 = fully submerged (the caller eases it). Needs the camera clip planes
+    // to turn scene depth into distance for the fog.
+    float underwater = 0.0f;
+    float nearPlane = 0.1f;
+    float farPlane = 800.0f;
 
 private:
     Framebuffer m_scene;

@@ -42,8 +42,12 @@ namespace gfx
         m_composite.SetFloat("uVignette", vignette);
         m_composite.SetFloat("uGrain", grain);
         m_composite.SetFloat("uTime", time);
+        m_composite.SetFloat("uUnderwater", underwater);
+        m_composite.SetFloat("uNear", nearPlane);
+        m_composite.SetFloat("uFar", farPlane);
         glBindTextureUnit(0, m_scene.ColorTexture());
         glBindTextureUnit(1, bloomTex);
+        glBindTextureUnit(2, m_scene.DepthTexture());
         m_vao.Bind();
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }

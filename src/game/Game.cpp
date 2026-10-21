@@ -430,6 +430,17 @@ namespace game
 				m_post.Resize(size.x, size.y);
 				m_post.time = static_cast<float>(now);
 				m_post.exposure = glm::mix(1.6f, 0.85f, m_world->DayNight().Daylight());
+				{
+					// Submerged when the camera is below the sea surface (a little slack for wave height).
+					const gfx::Camera &cam = GetCamera();
+					const float target = cam.position.y < Terrain::kSeaLevel - 0.05f && m_world->GetTerrainHeight(cam.position.x, cam.position.z) < cam.position.y ? 1.0f : 0.0f;
+					m_underwaterBlend += std::clamp(target - m_underwaterBlend, -1.0f, 1.0f) * std::min(1.0f, static_cast<float>(dt) * 8.0f);
+					m_world->underwater = target > 0.5f;
+					m_audio->SetMuffle(m_underwaterBlend);
+					m_post.underwater = m_underwaterBlend;
+					m_post.nearPlane = cam.nearPlane;
+					m_post.farPlane = cam.farPlane;
+				}
 				m_post.BeginScene();
 				m_world->Render(static_cast<float>(size.x) / static_cast<float>(size.y), m_post.DepthTexture(), size.x, size.y, GetCamera());
 				m_post.EndScene(size.x, size.y);

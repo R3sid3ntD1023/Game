@@ -144,6 +144,13 @@ namespace eng
 		m_weather.Update(dt);
 		const WeatherProfile &w = m_weather.Blend();
 
+		// Surfaces soak in over ~15 s of rain, then dry out (faster in bright, windy weather) over a minute or two.
+		if (w.rain > 0.05f)
+			m_wetness = std::min(1.0f, m_wetness + dt * w.rain / 15.0f);
+		else
+			m_wetness = std::max(0.0f, m_wetness - dt * (0.4f + w.light + 0.3f * w.wind) / 90.0f);
+		m_renderer.SetWetness(m_wetness);
+
 		// Rain falls over the whole island; the weather only sets its intensity.
 		m_weatherLookupTimer -= dt;
 		if ((!m_rainObject || !m_windObject) && m_weatherLookupTimer <= 0.0f)
@@ -238,6 +245,17 @@ namespace eng
 		const glm::mat4 viewProj = proj * view;
 
 		m_renderer.SetWind(m_windTime, m_windDirection * m_weather.Blend().wind);
+		if (!m_renderer.HasShoreMap() && m_worldQuery)
+		{
+			// Coarse terrain height grid for the ocean's shoreline foam and shallow-water tint.
+			constexpr int kSize = 384;
+			constexpr float kExtent = 768.0f;
+			std::vector<float> heights(static_cast<size_t>(kSize) * kSize);
+			for (int j = 0; j < kSize; ++j)
+				for (int i = 0; i < kSize; ++i)
+					heights[static_cast<size_t>(j) * kSize + i] = GetTerrainHeight(((i + 0.5f) / kSize - 0.5f) * kExtent, ((j + 0.5f) / kSize - 0.5f) * kExtent);
+			m_renderer.SetShoreMap(heights, kSize, glm::vec2(0.0f), kExtent);
+		}
 		m_renderer.Build(m_registry);
 
 		const WeatherProfile &weather = m_weather.Blend();

@@ -59,6 +59,7 @@ namespace eng
 		void EmitNoise(const glm::vec3 &position, float radius, const GameObject *source = nullptr);
 		const std::vector<NoiseEvent> &Noises() const { return m_noises; }
 		bool debugPerception = false; // draws AI sight cones, hearing ranges and awareness
+		bool underwater = false;	  // set by the game when the camera is below the sea; slows the player
 
 		void RegisterParticles(ParticleSystemComponent *e) { m_particleComponents.push_back(e); }
 		void UnregisterParticles(ParticleSystemComponent *e);
@@ -118,6 +119,7 @@ namespace eng
 		void BuildBolt(const glm::vec3 &cameraPos, const LightningStrike &strike);
 
 		WeatherSystem m_weather;
+		float m_wetness = 0.0f;
 		GameObject *m_rainObject = nullptr;
 		GameObject *m_windObject = nullptr;
 		float m_weatherLookupTimer = 0.0f;

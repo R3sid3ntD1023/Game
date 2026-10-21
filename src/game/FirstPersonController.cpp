@@ -113,7 +113,10 @@ namespace game
 		glm::vec3 wish = fwd * float(m_forward - m_back) + right * float(m_right - m_left);
 		if (glm::dot(wish, wish) > 0.0f)
 			wish = glm::normalize(wish);
-		const glm::vec3 target = wish * (m_sprint ? sprintSpeed : walkSpeed);
+		// Water drags: slower on the move, with a weaker jump.
+		const bool wading = gameObject->GetWorld().underwater;
+		const float drag = wading ? 0.45f : 1.0f;
+		const glm::vec3 target = wish * (m_sprint ? sprintSpeed : walkSpeed) * drag;
 
 		const float accel = m_body->grounded ? 12.0f : 3.0f; // limited air control
 		const float k = std::min(1.0f, accel * dt);
@@ -121,7 +124,7 @@ namespace game
 		m_body->velocity.z += (target.z - m_body->velocity.z) * k;
 
 		if (m_jump && m_body->grounded)
-			m_body->velocity.y = jumpSpeed;
+			m_body->velocity.y = jumpSpeed * (wading ? 0.6f : 1.0f);
 	}
 
 	void FirstPersonController::UpdateFootsteps(float dt)

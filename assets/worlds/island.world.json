@@ -63,8 +63,8 @@
                 "normalMap": "",
                 "metalRoughMap": "",
                 "windStrength": 0.0,
-                "shader": "",
-                "doubleSided": false
+                "shader": "Ocean",
+                "doubleSided": true
             },
             {
                 "name": "leaves",

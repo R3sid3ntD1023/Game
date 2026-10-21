@@ -1,6 +1,7 @@
 #pragma once
 #include <AL/al.h>
 #include <AL/alc.h>
+#include <AL/efx.h>
 #include <glm/glm.hpp>
 #include <string>
 #include <unordered_map>
@@ -22,6 +23,8 @@ public:
 
     void SetListener(const glm::vec3& position, const glm::vec3& forward, const glm::vec3& up);
     void SetMasterVolume(float volume);
+    // Muffles every sound with a low-pass filter: 0 = clear, 1 = fully muffled (underwater). Needs ALC_EXT_EFX.
+    void SetMuffle(float amount);
     void Update(); // recycles finished one-shot sources; call once per frame
 
     // Fire-and-forget sounds. Play2D is not positional (weapon, UI, footsteps of the listener).
@@ -44,6 +47,11 @@ private:
     std::vector<ALuint> m_free;
     std::vector<ALuint> m_oneShots; // oldest first
     std::vector<ALuint> m_all;
+
+    ALuint m_lowPass = 0; // EFX filter object, 0 when EFX is unavailable
+    float m_muffle = 0.0f;
+    LPALFILTERI m_alFilteri = nullptr;
+    LPALFILTERF m_alFilterf = nullptr;
 };
 
 } // namespace audio

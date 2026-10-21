@@ -33,6 +33,11 @@ Surface GetSurface() {
     c = mix(c, rock, rockMask);
     rough = mix(rough, 0.7, rockMask);
 
+    // Rain collects in puddles on flat ground above the waterline.
+    float puddle = smoothstep(0.6, 1.0, uWetness) * smoothstep(0.66, 0.72, Fbm(p * 0.06 + 11.0)) * smoothstep(0.95, 0.995, n.y) * smoothstep(0.4, 0.9, wp.y);
+    c *= 1.0 - 0.35 * puddle;
+    rough = mix(rough, 0.05, puddle);
+
     vec4 a = texture(uAlbedoMap, fs.uv) * uBaseColor;
     Surface s;
     s.albedo = c;

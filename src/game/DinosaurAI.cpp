@@ -38,6 +38,12 @@ namespace game
 		);
 
 		InitializeBehaviorTree();
+
+		m_awakeSenses = m_perception.config;
+		m_awakeTimer = static_cast<float>(std::rand() % 4000) / 100.0f;
+		m_awakeLimit = 50.0f + static_cast<float>(std::rand() % 6000) / 100.0f;
+		if (std::rand() % 3 == 0)
+			StartSleep();
 	}
 
 	void DinosaurAI::OnUpdate(float dt)
@@ -47,12 +53,75 @@ namespace game
 		m_perception.Update(dt, *gameObject, m_target);
 		if (gameObject->GetWorld().debugPerception)
 			m_perception.DrawDebug(*gameObject, m_target.GetTransform().position);
+		UpdateRest(dt);
 
 		UpdateAudio(dt);
-		UpdateAnimation();
+		UpdateAnimation(dt);
 
 		m_aiContext.deltaTime = dt;
 		m_behaviorTree.Tick(m_aiContext);
+	}
+
+	void DinosaurAI::StartSleep()
+	{
+		m_sleeping = true;
+		m_sleepTimer = 25.0f + static_cast<float>(std::rand() % 2000) / 100.0f;
+		m_awakeSenses = m_perception.config;
+		// Asleep: only things very close or very loud get through.
+		m_perception.config.sightRange = 7.0f;
+		m_perception.config.hearingSensitivity = 0.35f;
+		m_perception.config.sightRate *= 0.5f;
+	}
+
+	void DinosaurAI::WakeUp()
+	{
+		m_sleeping = false;
+		m_awakeTimer = 0.0f;
+		m_awakeLimit = 50.0f + static_cast<float>(std::rand() % 6000) / 100.0f;
+		m_perception.config = m_awakeSenses;
+	}
+
+	// Drives the sleep and hunt timers that the behaviour tree conditions read.
+	void DinosaurAI::UpdateRest(float dt)
+	{
+		const bool alerted = m_perception.Alerted();
+		if (alerted)
+			m_lastAlertPos = m_perception.LastKnownPosition();
+
+		if (m_sleeping)
+		{
+			m_sleepTimer -= dt;
+			if (alerted || m_sleepTimer <= 0.0f)
+				WakeUp();
+		}
+		else if (!alerted && m_huntTimer <= 0.0f && (m_stateEnum == DinosaurState::Wandering || m_stateEnum == DinosaurState::Idle))
+		{
+			m_awakeTimer += dt;
+			if (m_awakeTimer > m_awakeLimit)
+				StartSleep();
+		}
+
+		// Lost the target: search the surrounding area for a while.
+		if (m_wasAlerted && !alerted && !m_sleeping)
+		{
+			m_huntTimer = 25.0f;
+			m_huntCentre = m_lastAlertPos;
+			m_huntRepick = 0.0f;
+		}
+		m_wasAlerted = alerted;
+		if (alerted)
+			m_huntTimer = 0.0f;
+		else
+			m_huntTimer = std::max(0.0f, m_huntTimer - dt);
+	}
+
+	glm::vec3 DinosaurAI::PickHuntPoint() const
+	{
+		const float angle = static_cast<float>(std::rand() % 628) / 100.0f;
+		const float radius = 6.0f + static_cast<float>(std::rand() % 1900) / 100.0f;
+		glm::vec3 p = m_huntCentre + glm::vec3(std::cos(angle), 0.0f, std::sin(angle)) * radius;
+		p.y = gameObject->GetTransform().position.y;
+		return p;
 	}
 
 	void DinosaurAI::OnFixedUpdate(float dt)
@@ -66,9 +135,11 @@ namespace game
 		m_aiContext.self = gameObject;
 		m_aiContext.blackboard.Add<glm::vec3>("target");
 		m_aiContext.blackboard.Add<glm::vec3>("chaseTarget");
+		m_aiContext.blackboard.Add<glm::vec3>("huntTarget");
 
 		auto chaseTo = m_behaviorTree.AddNode<ai::MoveTo>();
 		auto wanderTo = m_behaviorTree.AddNode<ai::MoveTo>();
+		auto huntTo = m_behaviorTree.AddNode<ai::MoveTo>();
 
 		auto attackCondition = [this](ai::AIContext &ctx)
 		{
@@ -227,8 +298,69 @@ namespace game
 		chaseSequence->AddChild(chase);
 		chaseSequence->AddChild(chaseTo);
 
+		// sleep: lie still until the sleep timer ends or something wakes it
+		auto sleepCondition = m_behaviorTree.AddNode<ai::Conditional>();
+		sleepCondition->SetName("IsSleeping");
+		sleepCondition->SetCondition([this](ai::AIContext &) { return m_sleeping; });
+
+		auto sleepAction = m_behaviorTree.AddNode<ai::Action>();
+		sleepAction->SetName("Sleep");
+		sleepAction->SetAction(
+			[this](ai::AIContext &)
+			{
+				if (m_branch != Branch::Sleep)
+					m_branch = Branch::Sleep;
+				m_body->velocity.x = m_body->velocity.z = 0.0f;
+				SetState(DinosaurState::Sleeping);
+				return ai::Node::State::Running;
+			}
+		);
+
+		auto sleepSequence = m_behaviorTree.AddNode<ai::Sequence>();
+		sleepSequence->SetName("SleepSequence");
+		sleepSequence->AddChild(sleepCondition);
+		sleepSequence->AddChild(sleepAction);
+
+		// hunt: walk between random points around where the target was last known
+		auto huntCondition = m_behaviorTree.AddNode<ai::Conditional>();
+		huntCondition->SetName("IsHunting");
+		huntCondition->SetCondition([this](ai::AIContext &) { return m_huntTimer > 0.0f; });
+
+		huntTo->SetName("HuntTo");
+		huntTo->m_target = "huntTarget";
+		huntTo->m_speed = m_speed * 0.55f;
+
+		auto huntAction = m_behaviorTree.AddNode<ai::Action>();
+		huntAction->SetName("Hunt");
+		huntAction->SetAction(
+			[this, huntTo](ai::AIContext &ctx)
+			{
+				m_huntRepick -= ctx.deltaTime;
+				glm::vec3 toGoal = ctx.blackboard.IsSet("huntTarget") ? ctx.blackboard.Get<glm::vec3>("huntTarget") - ctx.self->GetTransform().position : glm::vec3(0.0f);
+				toGoal.y = 0.0f;
+				const bool needPoint = m_branch != Branch::Hunt || !ctx.blackboard.IsSet("huntTarget") || m_huntRepick <= 0.0f || glm::length(toGoal) < 2.0f;
+				if (needPoint)
+				{
+					m_branch = Branch::Hunt;
+					m_huntRepick = 7.0f;
+					ctx.blackboard.Set<glm::vec3>("huntTarget", PickHuntPoint());
+					huntTo->Restart();
+				}
+				SetState(DinosaurState::Hunting);
+				return ai::Node::State::Success;
+			}
+		);
+
+		auto huntSequence = m_behaviorTree.AddNode<ai::Sequence>();
+		huntSequence->SetName("HuntSequence");
+		huntSequence->AddChild(huntCondition);
+		huntSequence->AddChild(huntAction);
+		huntSequence->AddChild(huntTo);
+
 		prioritySelector->AddChild(attackSequence);
 		prioritySelector->AddChild(chaseSequence);
+		prioritySelector->AddChild(sleepSequence);
+		prioritySelector->AddChild(huntSequence);
 		prioritySelector->AddChild(findPointSelector);
 		root->SetChild(prioritySelector);
 
@@ -242,17 +374,17 @@ namespace game
 		if (!audio)
 			return;
 
-		if (m_stateEnum != DinosaurState::Wandering && m_stateEnum != DinosaurState::Chasing)
+		if (m_stateEnum != DinosaurState::Wandering && m_stateEnum != DinosaurState::Chasing && m_stateEnum != DinosaurState::Hunting)
 			return;
 
-		float speed = m_stateEnum == DinosaurState::Chasing ? m_speed : m_speed * 0.3f;
+		const float speed = m_stateEnum == DinosaurState::Chasing ? m_speed : m_stateEnum == DinosaurState::Hunting ? m_speed * 0.55f : m_speed * 0.3f;
 
 		if (!m_body->grounded)
 			return;
 
 		m_stepDistance += speed * dt;
 
-		float distancePerStep = m_stateEnum == DinosaurState::Chasing ? 1.8f : 2.8f;
+		float distancePerStep = m_stateEnum == DinosaurState::Chasing ? 1.8f : m_stateEnum == DinosaurState::Hunting ? 2.2f : 2.8f;
 		if (m_stepDistance >= distancePerStep)
 		{
 			m_stepDistance = 0.0f;
@@ -260,36 +392,46 @@ namespace game
 		}
 	}
 
-	void DinosaurAI::UpdateAnimation()
+	void DinosaurAI::UpdateAnimation(float dt)
 	{
 		if (!m_animator)
 			return;
 
+		// The pose hook reads blend as 0 idle .. 1 run, and 0 .. -1 for lying asleep; it eases between them.
+		float target = 0.0f, speed = 1.0f;
 		switch (m_stateEnum)
 		{
-		case DinosaurState::Idle:
-			m_animator->blend = 0.0f;
-			m_animator->speed = 1.0f;
-			break;
 		case DinosaurState::Wandering:
-			m_animator->blend = 0.3f;
-			m_animator->speed = 0.8f;
+			target = 0.3f;
+			speed = 0.8f;
+			break;
+		case DinosaurState::Hunting:
+			target = 0.6f;
+			speed = 1.2f;
+			break;
+		case DinosaurState::Sleeping:
+			target = -1.0f;
+			speed = 0.6f;
 			break;
 		case DinosaurState::Chasing:
-			m_animator->blend = 1.0f;
-			m_animator->speed = 2.0f;
+			target = 1.0f;
+			speed = 2.0f;
 			break;
 		case DinosaurState::Attacking:
-			m_animator->blend = 0.0f;
-			m_animator->speed = 1.5f;
+			speed = 1.5f;
 			break;
 		case DinosaurState::Dead:
-			m_animator->blend = 0.0f;
-			m_animator->speed = 0.0f;
+			speed = 0.0f;
 			break;
 		default:
 			break;
 		}
+		// Lying down is slow; getting up is quick so a woken dinosaur is not a sitting duck.
+		const float rate = (target < m_poseBlend && target < 0.0f) ? 1.2f : 4.0f;
+		const float step = rate * dt;
+		m_poseBlend += glm::clamp(target - m_poseBlend, -step, step);
+		m_animator->blend = m_poseBlend;
+		m_animator->speed = speed;
 	}
 
 	void DinosaurAI::SetState(DinosaurState state)

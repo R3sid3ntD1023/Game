@@ -55,6 +55,12 @@ namespace gfx
         void SetOverlayMode(int mode) { m_overlayMode = mode; }
         // Foliage wind: time in seconds and a world XZ direction whose length is the wind strength (0..1).
         void SetWind(float time, const glm::vec2 &dir) { m_time = time; m_windDir = dir; }
+        // Surface wetness 0..1 (rain). Materials darken and become glossier as it rises.
+        void SetWetness(float wetness) { m_wetness = wetness; }
+        // Terrain height over a square of `extent` metres centred on `center` (size x size samples, row-major in
+        // z then x). The ocean shader reads it for shoreline foam and shallow-water colour.
+        void SetShoreMap(const std::vector<float> &heights, int size, const glm::vec2 &center, float extent);
+        bool HasShoreMap() const { return m_shoreTex != 0; }
         void OverlayPass(const glm::mat4 &viewProj, float alpha = 0.35f);
 
 
@@ -87,6 +93,10 @@ namespace gfx
         int m_overlayMode = 0;
         float m_time = 0.0f;
         glm::vec2 m_windDir{0.0f};
+        float m_wetness = 0.0f;
+        GLuint m_shoreTex = 0;
+        glm::vec2 m_shoreCenter{0.0f};
+        float m_shoreExtent = 1.0f;
         glm::vec2 m_overlayOrigin{0.0f};
         float m_overlayCellSize = 1.0f;
         GpuBuffer m_indirectBuffer;
