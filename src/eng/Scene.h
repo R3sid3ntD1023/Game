@@ -86,7 +86,7 @@ namespace eng
     struct SceneData
     {
         static constexpr uint32_t kMagic = 0x57444C47; // "GLDW"
-        static constexpr uint32_t kVersion = 10;
+        static constexpr uint32_t kVersion = 11;
 
         std::vector<MaterialDesc> materials;
         std::vector<MeshDesc> meshes;

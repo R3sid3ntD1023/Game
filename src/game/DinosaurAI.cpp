@@ -1,5 +1,6 @@
 #include "game/DinosaurAI.h"
 #include "ai/Nodes.h"
+#include "game/HerbivoreAI.h"
 #include "eng/World.h"
 #include <algorithm>
 #include <cmath>
@@ -11,12 +12,30 @@
 namespace game
 {
 
+	DinosaurAI::~DinosaurAI()
+	{
+		if (m_registered)
+			Ecology::Remove(m_ecology->raptors, this);
+	}
+
+	void DinosaurAI::Hurt(float amount)
+	{
+		if (Dead())
+			return;
+		m_animalDamage = true;
+		m_health->Damage(amount);
+		m_animalDamage = false;
+	}
+
 	void DinosaurAI::OnStart()
 	{
 		m_body = gameObject->GetComponent<eng::RigidBody>();
 		m_health = gameObject->GetComponent<eng::Health>();
 		m_targetHealth = m_target.GetComponent<eng::Health>();
 		m_animator = gameObject->GetComponent<eng::Animator>();
+
+		m_ecology->raptors.push_back(this);
+		m_registered = true;
 
 		m_health->SetOnDamageCallback(
 			[this](float amount)
@@ -25,12 +44,13 @@ namespace game
 				{
 					SetState(DinosaurState::Dead);
 					m_body->velocity = glm::vec3(0.0f);
-					++m_state.kills;
+					if (!m_animalDamage)
+						++m_state.kills;
 					gameObject->GetWorld().EmitBlood(gameObject->GetTransform().position, glm::vec3(0.0f, 1.0f, 0.0f), 60);
 					gameObject->Destroy();
 					spdlog::info("Dinosaur down ({} kills)", m_state.kills);
 				}
-				else
+				else if (!m_animalDamage)
 				{
 					m_perception.OnDamaged(amount, m_target.GetTransform().position);
 				}
@@ -48,12 +68,17 @@ namespace game
 
 	void DinosaurAI::OnUpdate(float dt)
 	{
+		if (Dead())
+			return;
+
 		m_attackTimer = std::max(0.0f, m_attackTimer - dt);
+		m_preyBiteTimer = std::max(0.0f, m_preyBiteTimer - dt);
 
 		m_perception.Update(dt, *gameObject, m_target);
 		if (gameObject->GetWorld().debugPerception)
 			m_perception.DrawDebug(*gameObject, m_target.GetTransform().position);
 		UpdateRest(dt);
+		UpdatePrey(dt);
 
 		UpdateAudio(dt);
 		UpdateAnimation(dt);
@@ -124,6 +149,93 @@ namespace game
 		return p;
 	}
 
+	HerbivoreAI *DinosaurAI::CurrentPrey() const
+	{
+		if (!m_preyId)
+			return nullptr;
+		HerbivoreAI *prey = m_ecology->FindHerbivore(m_preyId);
+		return prey && !prey->Dead() ? prey : nullptr;
+	}
+
+	float DinosaurAI::PreyDistance(const HerbivoreAI &prey) const
+	{
+		const glm::vec3 d = prey.Position() - gameObject->GetTransform().position;
+		return glm::length(glm::vec2(d.x, d.z));
+	}
+
+	void DinosaurAI::AbandonPrey(float cooldown)
+	{
+		m_preyId = 0;
+		m_preyCalled = false;
+		m_preyTime = 0.0f;
+		m_preyCooldown = cooldown;
+		m_aiContext.blackboard.Clear("preyTarget");
+	}
+
+	// Picks out large prey, hears other raptors' calls, and gives up on hunts that have no pack or drag on.
+	void DinosaurAI::UpdatePrey(float dt)
+	{
+		m_preyCooldown = std::max(0.0f, m_preyCooldown - dt);
+		m_preyScanTimer -= dt;
+		const glm::vec3 pos = gameObject->GetTransform().position;
+
+		uint32_t newestCall = m_lastCallId;
+		for (const PackCall &call : m_ecology->Calls())
+		{
+			if (call.id <= m_lastCallId)
+				continue;
+			newestCall = std::max(newestCall, call.id);
+			if (call.caller == this || m_preyId || m_preyCooldown > 0.0f || m_perception.Alerted() || glm::distance(pos, call.position) > call.radius)
+				continue;
+			HerbivoreAI *prey = m_ecology->FindHerbivore(call.preyId);
+			if (!prey || prey->Dead())
+				continue;
+			if (m_sleeping)
+				WakeUp();
+			m_preyId = call.preyId;
+			m_preyCalled = true; // the caller already summoned the pack
+			m_preyTime = 0.0f;
+		}
+		m_lastCallId = newestCall;
+
+		if (m_preyId)
+		{
+			m_preyTime += dt;
+			if (!CurrentPrey())
+				AbandonPrey(10.0f); // it died (maybe at our teeth); take a breather
+			else if (m_preyTime > 60.0f)
+				AbandonPrey(40.0f);
+			else if (m_preyCalled && m_preyTime > 4.0f && m_ecology->PackSize(m_preyId) < 2)
+				AbandonPrey(45.0f); // no pack, no hunt
+			return;
+		}
+
+		if (m_sleeping || m_perception.Alerted() || m_preyCooldown > 0.0f || m_preyScanTimer > 0.0f)
+			return;
+		m_preyScanTimer = 0.6f + static_cast<float>(std::rand() % 40) / 100.0f;
+
+		// Only large herbivores are worth a pack's effort.
+		HerbivoreAI *best = nullptr;
+		float bestDist = 45.0f;
+		for (HerbivoreAI *h : m_ecology->herbivores)
+		{
+			if (!h->Large() || h->Dead())
+				continue;
+			const float d = PreyDistance(*h);
+			if (d < bestDist)
+			{
+				bestDist = d;
+				best = h;
+			}
+		}
+		if (best)
+		{
+			m_preyId = best->Id();
+			m_preyCalled = false;
+			m_preyTime = 0.0f;
+		}
+	}
+
 	void DinosaurAI::OnFixedUpdate(float dt)
 	{
 		if (!m_body || (m_health && m_health->Dead()))
@@ -136,10 +248,12 @@ namespace game
 		m_aiContext.blackboard.Add<glm::vec3>("target");
 		m_aiContext.blackboard.Add<glm::vec3>("chaseTarget");
 		m_aiContext.blackboard.Add<glm::vec3>("huntTarget");
+		m_aiContext.blackboard.Add<glm::vec3>("preyTarget");
 
 		auto chaseTo = m_behaviorTree.AddNode<ai::MoveTo>();
 		auto wanderTo = m_behaviorTree.AddNode<ai::MoveTo>();
 		auto huntTo = m_behaviorTree.AddNode<ai::MoveTo>();
+		auto preyTo = m_behaviorTree.AddNode<ai::MoveTo>();
 
 		auto attackCondition = [this](ai::AIContext &ctx)
 		{
@@ -357,10 +471,148 @@ namespace game
 		huntSequence->AddChild(huntAction);
 		huntSequence->AddChild(huntTo);
 
+		// Pack hunt: spot large prey, roar to call the pack, then close in together and bite. Below player-related
+		// behaviour so a raptor that notices the player drops the hunt for them.
+		auto preyInReach = m_behaviorTree.AddNode<ai::Conditional>();
+		preyInReach->SetName("PreyInReach");
+		preyInReach->SetCondition(
+			[this](ai::AIContext &)
+			{
+				HerbivoreAI *prey = CurrentPrey();
+				return prey && m_preyCalled && PreyDistance(*prey) <= prey->Radius() + 1.7f;
+			}
+		);
+
+		auto preyBite = m_behaviorTree.AddNode<ai::Action>();
+		preyBite->SetName("PreyBite");
+		preyBite->SetAction(
+			[this](ai::AIContext &ctx)
+			{
+				HerbivoreAI *prey = CurrentPrey();
+				if (!prey)
+					return ai::Node::State::Failure;
+				SetState(DinosaurState::Attacking);
+				m_branch = Branch::Prey;
+				m_body->velocity.x = m_body->velocity.z = 0.0f;
+
+				auto &self = ctx.self->GetTransform();
+				glm::vec3 dir = prey->Position() - self.position;
+				dir.y = 0.0f;
+				const float len = glm::length(dir);
+				if (len > 1e-3f)
+				{
+					dir /= len;
+					self.rotation = glm::angleAxis(std::atan2(-dir.z, dir.x), glm::vec3(0, 1, 0));
+				}
+
+				if (m_preyBiteTimer <= 0.0f)
+				{
+					m_preyBiteTimer = 0.9f;
+					gameObject->GetWorld().EmitBlood(prey->Position() - dir * prey->Radius() + glm::vec3(0.0f, 0.8f, 0.0f), -dir, 12);
+					prey->Hurt(m_damage);
+				}
+				return ai::Node::State::Running;
+			}
+		);
+
+		auto preyBiteSequence = m_behaviorTree.AddNode<ai::Sequence>();
+		preyBiteSequence->SetName("PreyBiteSequence");
+		preyBiteSequence->AddChild(preyInReach);
+		preyBiteSequence->AddChild(preyBite);
+
+		auto needsCall = m_behaviorTree.AddNode<ai::Conditional>();
+		needsCall->SetName("NeedsPackCall");
+		needsCall->SetCondition([this](ai::AIContext &) { return CurrentPrey() && !m_preyCalled; });
+
+		auto callPack = m_behaviorTree.AddNode<ai::Action>();
+		callPack->SetName("CallPack");
+		callPack->SetAction(
+			[this](ai::AIContext &ctx)
+			{
+				HerbivoreAI *prey = CurrentPrey();
+				if (!prey)
+					return ai::Node::State::Failure;
+				m_body->velocity.x = m_body->velocity.z = 0.0f;
+				SetState(DinosaurState::Calling);
+				m_branch = Branch::Prey;
+
+				auto &self = ctx.self->GetTransform();
+				glm::vec3 dir = prey->Position() - self.position;
+				dir.y = 0.0f;
+				if (glm::length(dir) > 1e-3f)
+					self.rotation = glm::angleAxis(std::atan2(-dir.z, dir.x), glm::vec3(0, 1, 0));
+
+				m_ecology->EmitPackCall(self.position, 70.0f, m_preyId, this);
+				if (auto *audio = gameObject->GetWorld().audio)
+					audio->PlayOneShot("raptor_call", self.position, 1.4f, 0.95f + 0.1f * static_cast<float>(std::rand() % 100) / 100.0f);
+				return ai::Node::State::Success;
+			}
+		);
+
+		auto callWait = m_behaviorTree.AddNode<ai::Wait>();
+		callWait->SetName("CallWait");
+		callWait->m_duration = 1.4f; // time for the pack to answer
+
+		auto finishCall = m_behaviorTree.AddNode<ai::Action>();
+		finishCall->SetName("FinishCall");
+		finishCall->SetAction(
+			[this](ai::AIContext &)
+			{
+				if (!CurrentPrey())
+					return ai::Node::State::Failure;
+				m_preyCalled = true;
+				if (m_ecology->PackSize(m_preyId) < 2)
+				{
+					AbandonPrey(45.0f); // nobody answered
+					return ai::Node::State::Failure;
+				}
+				return ai::Node::State::Success;
+			}
+		);
+
+		auto callSequence = m_behaviorTree.AddNode<ai::MemSequence>();
+		callSequence->SetName("PackCallSequence");
+		callSequence->AddChild(needsCall);
+		callSequence->AddChild(callPack);
+		callSequence->AddChild(callWait);
+		callSequence->AddChild(finishCall);
+
+		auto hasPrey = m_behaviorTree.AddNode<ai::Conditional>();
+		hasPrey->SetName("HasPrey");
+		hasPrey->SetCondition([this](ai::AIContext &) { return CurrentPrey() && m_preyCalled; });
+
+		auto trackPrey = m_behaviorTree.AddNode<ai::Action>();
+		trackPrey->SetName("TrackPrey");
+		trackPrey->SetAction(
+			[this](ai::AIContext &ctx)
+			{
+				HerbivoreAI *prey = CurrentPrey();
+				if (!prey)
+					return ai::Node::State::Failure;
+				m_branch = Branch::Prey;
+				ctx.blackboard.Set<glm::vec3>("preyTarget", prey->Position());
+				SetState(DinosaurState::Stalking);
+				return ai::Node::State::Success;
+			}
+		);
+
+		preyTo->SetName("PreyTo");
+		preyTo->m_target = "preyTarget";
+		preyTo->m_speed = m_speed * 0.9f;
+
+		auto preySequence = m_behaviorTree.AddNode<ai::Sequence>();
+		preySequence->SetName("PreyApproachSequence");
+		preySequence->AddChild(hasPrey);
+		preySequence->AddChild(trackPrey);
+		preySequence->AddChild(preyTo);
+
 		prioritySelector->AddChild(attackSequence);
 		prioritySelector->AddChild(chaseSequence);
 		prioritySelector->AddChild(sleepSequence);
 		prioritySelector->AddChild(huntSequence);
+		prioritySelector->AddChild(preyBiteSequence);
+		prioritySelector->AddChild(callSequence);
+		prioritySelector->AddChild(preySequence);
 		prioritySelector->AddChild(findPointSelector);
 		root->SetChild(prioritySelector);
 
@@ -374,10 +626,10 @@ namespace game
 		if (!audio)
 			return;
 
-		if (m_stateEnum != DinosaurState::Wandering && m_stateEnum != DinosaurState::Chasing && m_stateEnum != DinosaurState::Hunting)
+		if (m_stateEnum != DinosaurState::Wandering && m_stateEnum != DinosaurState::Chasing && m_stateEnum != DinosaurState::Hunting && m_stateEnum != DinosaurState::Stalking)
 			return;
 
-		const float speed = m_stateEnum == DinosaurState::Chasing ? m_speed : m_stateEnum == DinosaurState::Hunting ? m_speed * 0.55f : m_speed * 0.3f;
+		const float speed = m_stateEnum == DinosaurState::Chasing ? m_speed : m_stateEnum == DinosaurState::Stalking ? m_speed * 0.9f : m_stateEnum == DinosaurState::Hunting ? m_speed * 0.55f : m_speed * 0.3f;
 
 		if (!m_body->grounded)
 			return;
@@ -419,6 +671,13 @@ namespace game
 			break;
 		case DinosaurState::Attacking:
 			speed = 1.5f;
+			break;
+		case DinosaurState::Calling:
+			speed = 1.2f;
+			break;
+		case DinosaurState::Stalking:
+			target = 0.9f;
+			speed = 1.8f;
 			break;
 		case DinosaurState::Dead:
 			speed = 0.0f;

@@ -1,4 +1,5 @@
 #include "Nodes.h"
+#include <cstdlib>
 #include <eng/GameObject.h>
 #include <eng/RigidBody.h>
 #include <eng/World.h>
@@ -29,20 +30,78 @@ namespace ai
 
 	Node::State Selector::OnExecute(AIContext &ctx)
 	{
-		for (Node *child : GetChildren())
+		auto &children = GetChildren();
+		for (size_t i = 0; i < children.size(); ++i)
 		{
-			Node::State status = child->Execute(ctx);
-			switch (status)
-			{
-			case Node::State::Success:
-				return Node::State::Success;
-			case Node::State::Failure:
+			const Node::State status = children[i]->Execute(ctx);
+			if (status == Node::State::Failure)
 				continue;
-			case Node::State::Running:
-				return Node::State::Running;
-			}
+
+			if (m_active != kNone && m_active != i)
+				children[m_active]->Abort();
+			m_active = status == Node::State::Running ? i : kNone;
+			return status;
 		}
+
+		if (m_active != kNone)
+			children[m_active]->Abort();
+		m_active = kNone;
 		return Node::State::Failure;
+	}
+
+	Node::State MemSequence::OnExecute(AIContext &ctx)
+	{
+		auto &children = GetChildren();
+		while (m_index < children.size())
+		{
+			const Node::State status = children[m_index]->Execute(ctx);
+			if (status == Node::State::Running)
+				return Node::State::Running;
+			if (status == Node::State::Failure)
+			{
+				m_index = 0;
+				return Node::State::Failure;
+			}
+			++m_index;
+		}
+		m_index = 0;
+		return Node::State::Success;
+	}
+
+	void Wait::OnStart(AIContext &ctx)
+	{
+		const float jitter = m_deviation * (2.0f * static_cast<float>(std::rand() % 1001) / 1000.0f - 1.0f);
+		m_remaining = std::max(0.0f, m_duration + jitter);
+		if (auto *body = ctx.self->GetComponent<eng::RigidBody>())
+			body->velocity.x = body->velocity.z = 0.0f;
+	}
+
+	Node::State Wait::OnExecute(AIContext &ctx)
+	{
+		m_remaining -= ctx.deltaTime;
+		return m_remaining <= 0.0f ? Node::State::Success : Node::State::Running;
+	}
+
+	Node::State RunEnvQuery::OnExecute(AIContext &ctx)
+	{
+		if (m_skipIfSet && ctx.blackboard.IsSet(m_locationKey))
+			return Node::State::Success;
+
+		m_cooldown -= ctx.deltaTime;
+		if (m_cooldown > 0.0f)
+			return Node::State::Failure;
+
+		EnvQueryItem best;
+		if (!query.Run(ctx, best))
+		{
+			m_cooldown = m_failCooldown;
+			return Node::State::Failure;
+		}
+
+		ctx.blackboard.Set<glm::vec3>(m_locationKey, best.location);
+		if (!m_dataKey.empty())
+			ctx.blackboard.Set<void *>(m_dataKey, best.data);
+		return Node::State::Success;
 	}
 
 	Node::State Inverter::OnExecute(AIContext &ctx)
@@ -237,7 +296,7 @@ namespace ai
 	{
 		auto &world = ctx.self->GetWorld();
 		glm::vec3 point;
-		if (world.FindRandomReachablePoint(point, ctx.self->GetTransform().position, 100.0f))
+		if (world.FindRandomReachablePoint(point, ctx.self->GetTransform().position, m_radius))
 		{
 			// spdlog::info("Found random reachable point: ({}, {}, {})", point.x, point.y, point.z);
 			ctx.blackboard.Set<glm::vec3>(m_target, point);

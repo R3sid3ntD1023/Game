@@ -59,6 +59,9 @@ namespace ai
 
 		void Restart() { m_started = false; } // forget a half-finished run so OnStart fires again (used when a branch is interrupted)
 
+		// Called by a Selector when a higher-priority branch preempts this one; composites also abort their children.
+		virtual void Abort() { m_started = false; }
+
 		virtual void OnStart(AIContext &) {}
 
 		void Reset() { m_state = State::Running; }

@@ -13,6 +13,9 @@
 #include "game/EscapeZone.h"
 #include "game/FirstPersonController.h"
 #include "game/Game.h"
+#include "game/HerbivoreAI.h"
+#include "game/HerbivoreModel.h"
+#include "game/Plant.h"
 #include "game/GrassGen.h"
 #include "game/Interaction.h"
 #include "game/IslandScene.h"
@@ -171,6 +174,8 @@ namespace game
 			}
 		}
 		loader.RegisterMesh(kMeshRaptor, [raptorModel](const eng::MeshDesc &) { return raptorModel ? raptorModel->mesh : RaptorMesh(); }, false);
+		loader.RegisterMesh(kMeshTriceratops, [](const eng::MeshDesc &) { return HerbivoreMesh(HerbivoreSpecies::Triceratops); }, false);
+		loader.RegisterMesh(kMeshProtoceratops, [](const eng::MeshDesc &) { return HerbivoreMesh(HerbivoreSpecies::Protoceratops); }, false);
 		loader.RegisterMesh(kMeshTreeTrunk, [](const eng::MeshDesc &d) { return GenerateRainforestTree(static_cast<uint32_t>(Param(d.params, 0, 100.0f))).trunk; });
 		loader.RegisterMesh(kMeshTreeCanopy, [](const eng::MeshDesc &d) { return GenerateRainforestTree(static_cast<uint32_t>(Param(d.params, 0, 100.0f))).canopy; });
 		loader.RegisterMesh(kMeshFern, [](const eng::MeshDesc &d) { return GenerateFern(static_cast<uint32_t>(Param(d.params, 0, 200.0f))); });
@@ -214,6 +219,24 @@ namespace game
 					go.AddComponent<eng::Animator>(RaptorSkeleton()).hook = RaptorPose;
 				go.AddComponent<eng::ScriptComponent>().Add<DinosaurAI>(*player, m_state, Param(p, 0, 8.0f), Param(p, 1, 12.0f));
 			}
+		);
+
+		loader.RegisterScript(
+			kScriptHerbivore,
+			[this](eng::GameObject &go, const std::vector<float> &p)
+			{
+				eng::GameObject *player = m_world->Find("Player");
+				if (!player)
+					throw std::runtime_error("Herbivore needs a Player object");
+				const auto species = Param(p, 0, 0.0f) < 0.5f ? HerbivoreSpecies::Triceratops : HerbivoreSpecies::Protoceratops;
+				go.AddComponent<eng::Animator>(HerbivoreSkeleton(species)).hook = HerbivorePose;
+				go.AddComponent<eng::ScriptComponent>().Add<HerbivoreAI>(species, *player, m_state, Param(p, 1, 6.0f));
+			}
+		);
+
+		loader.RegisterScript(
+			kScriptPlant,
+			[this](eng::GameObject &go, const std::vector<float> &p) { go.AddComponent<Plant>(m_state.ecology, static_cast<int>(Param(p, 0, 3.0f)), Param(p, 1, 60.0f)); }
 		);
 
 		loader.RegisterScript(
@@ -407,6 +430,7 @@ namespace game
 
 			if (m_world && m_screen == Screen::Playing && m_state.status == Status::Playing)
 			{
+				m_state.ecology->Update(dt);
 				m_world->Update(dt, GetCamera());
 				if (m_player->GetComponent<eng::Health>()->Dead())
 					m_state.status = Status::Lost;

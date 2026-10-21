@@ -1,6 +1,6 @@
 {
     "magic": 1464093767,
-    "version": 10,
+    "version": 11,
     "scene": {
         "materials": [
             {
@@ -443,6 +443,48 @@
                 "windStrength": 0.0,
                 "shader": "",
                 "doubleSided": false
+            },
+            {
+                "name": "triceratops_hide",
+                "color": {
+                    "x": 0.280000001,
+                    "y": 0.330000013,
+                    "z": 0.239999994
+                },
+                "metallic": 0.0,
+                "roughness": 0.699999988,
+                "emissive": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "albedoMap": "",
+                "normalMap": "",
+                "metalRoughMap": "",
+                "windStrength": 0.0,
+                "shader": "",
+                "doubleSided": false
+            },
+            {
+                "name": "protoceratops_hide",
+                "color": {
+                    "x": 0.449999988,
+                    "y": 0.360000014,
+                    "z": 0.219999998
+                },
+                "metallic": 0.0,
+                "roughness": 0.699999988,
+                "emissive": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "albedoMap": "",
+                "normalMap": "",
+                "metalRoughMap": "",
+                "windStrength": 0.0,
+                "shader": "",
+                "doubleSided": false
             }
         ],
         "meshes": [
@@ -550,6 +592,20 @@
                 "params": [
                     502.0
                 ],
+                "path": "",
+                "importMaterials": false
+            },
+            {
+                "name": "triceratops",
+                "kind": "triceratops",
+                "params": [],
+                "path": "",
+                "importMaterials": false
+            },
+            {
+                "name": "protoceratops",
+                "kind": "protoceratops",
+                "params": [],
                 "path": "",
                 "importMaterials": false
             }
@@ -175193,8 +175249,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175224,8 +175283,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175255,8 +175317,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175286,8 +175351,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175317,8 +175385,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175348,8 +175419,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175379,8 +175453,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175410,8 +175487,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175441,8 +175521,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175472,8 +175555,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175503,8 +175589,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175534,8 +175623,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175565,8 +175657,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175596,8 +175691,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175627,8 +175725,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175658,8 +175759,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175689,8 +175793,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175720,8 +175827,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175751,8 +175861,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175782,8 +175895,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175813,8 +175929,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175844,8 +175963,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175875,8 +175997,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175906,8 +176031,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175937,8 +176065,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175968,8 +176099,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -175999,8 +176133,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176030,8 +176167,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176061,8 +176201,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176092,8 +176235,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176123,8 +176269,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176154,8 +176303,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176185,8 +176337,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176216,8 +176371,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176247,8 +176405,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176278,8 +176439,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176309,8 +176473,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176340,8 +176507,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176371,8 +176541,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176402,8 +176575,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176433,8 +176609,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176464,8 +176643,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176495,8 +176677,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176526,8 +176711,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176557,8 +176745,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176588,8 +176779,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176619,8 +176813,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176650,8 +176847,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176681,8 +176881,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Fern",
@@ -176712,8 +176915,11 @@
                     "z": 0.5
                 },
                 "health": 0.0,
-                "script": "",
-                "scriptParams": []
+                "script": "Plant",
+                "scriptParams": [
+                    3.0,
+                    60.0
+                ]
             },
             {
                 "name": "Rock",
@@ -178279,6 +178485,278 @@
                 "scriptParams": [
                     8.0,
                     12.0
+                ]
+            },
+            {
+                "name": "Triceratops",
+                "position": {
+                    "x": -95.614608764,
+                    "y": 11.988236427,
+                    "z": -97.745498657
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0,
+                    "w": 1.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "mesh": 12,
+                "material": 21,
+                "hasBody": true,
+                "bodyStatic": false,
+                "halfExtents": {
+                    "x": 2.299999952,
+                    "y": 1.100000023,
+                    "z": 0.800000011
+                },
+                "health": 300.0,
+                "script": "HerbivoreAI",
+                "scriptParams": [
+                    0.0,
+                    5.5
+                ]
+            },
+            {
+                "name": "Triceratops",
+                "position": {
+                    "x": -92.250831604,
+                    "y": 12.301961898,
+                    "z": -76.829925537
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0,
+                    "w": 1.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "mesh": 12,
+                "material": 21,
+                "hasBody": true,
+                "bodyStatic": false,
+                "halfExtents": {
+                    "x": 2.299999952,
+                    "y": 1.100000023,
+                    "z": 0.800000011
+                },
+                "health": 300.0,
+                "script": "HerbivoreAI",
+                "scriptParams": [
+                    0.0,
+                    5.5
+                ]
+            },
+            {
+                "name": "Triceratops",
+                "position": {
+                    "x": 178.139328002,
+                    "y": 4.458824634,
+                    "z": 51.578670501
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0,
+                    "w": 1.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "mesh": 12,
+                "material": 21,
+                "hasBody": true,
+                "bodyStatic": false,
+                "halfExtents": {
+                    "x": 2.299999952,
+                    "y": 1.100000023,
+                    "z": 0.800000011
+                },
+                "health": 300.0,
+                "script": "HerbivoreAI",
+                "scriptParams": [
+                    0.0,
+                    5.5
+                ]
+            },
+            {
+                "name": "Protoceratops",
+                "position": {
+                    "x": -28.615753173,
+                    "y": 19.641960144,
+                    "z": -47.993797302
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0,
+                    "w": 1.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "mesh": 13,
+                "material": 22,
+                "hasBody": true,
+                "bodyStatic": false,
+                "halfExtents": {
+                    "x": 0.920000016,
+                    "y": 0.440000027,
+                    "z": 0.320000022
+                },
+                "health": 60.0,
+                "script": "HerbivoreAI",
+                "scriptParams": [
+                    1.0,
+                    7.5
+                ]
+            },
+            {
+                "name": "Protoceratops",
+                "position": {
+                    "x": -73.845458984,
+                    "y": 7.249804973,
+                    "z": 121.352127075
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0,
+                    "w": 1.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "mesh": 13,
+                "material": 22,
+                "hasBody": true,
+                "bodyStatic": false,
+                "halfExtents": {
+                    "x": 0.920000016,
+                    "y": 0.440000027,
+                    "z": 0.320000022
+                },
+                "health": 60.0,
+                "script": "HerbivoreAI",
+                "scriptParams": [
+                    1.0,
+                    7.5
+                ]
+            },
+            {
+                "name": "Protoceratops",
+                "position": {
+                    "x": 193.653686523,
+                    "y": 2.230197191,
+                    "z": 133.037857055
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0,
+                    "w": 1.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "mesh": 13,
+                "material": 22,
+                "hasBody": true,
+                "bodyStatic": false,
+                "halfExtents": {
+                    "x": 0.920000016,
+                    "y": 0.440000027,
+                    "z": 0.320000022
+                },
+                "health": 60.0,
+                "script": "HerbivoreAI",
+                "scriptParams": [
+                    1.0,
+                    7.5
+                ]
+            },
+            {
+                "name": "Protoceratops",
+                "position": {
+                    "x": 74.141548156,
+                    "y": 10.07333374,
+                    "z": 34.03678894
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0,
+                    "w": 1.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "mesh": 13,
+                "material": 22,
+                "hasBody": true,
+                "bodyStatic": false,
+                "halfExtents": {
+                    "x": 0.920000016,
+                    "y": 0.440000027,
+                    "z": 0.320000022
+                },
+                "health": 60.0,
+                "script": "HerbivoreAI",
+                "scriptParams": [
+                    1.0,
+                    7.5
+                ]
+            },
+            {
+                "name": "Protoceratops",
+                "position": {
+                    "x": 215.495605468,
+                    "y": 3.955687284,
+                    "z": 0.060689881
+                },
+                "rotation": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0,
+                    "w": 1.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "mesh": 13,
+                "material": 22,
+                "hasBody": true,
+                "bodyStatic": false,
+                "halfExtents": {
+                    "x": 0.920000016,
+                    "y": 0.440000027,
+                    "z": 0.320000022
+                },
+                "health": 60.0,
+                "script": "HerbivoreAI",
+                "scriptParams": [
+                    1.0,
+                    7.5
                 ]
             }
         ]

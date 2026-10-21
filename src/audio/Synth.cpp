@@ -296,6 +296,79 @@ namespace audio
             return ToPcm(x);
         }
 
+        // Three rising shrieks: the call that summons the pack.
+        PcmSound RaptorCall()
+        {
+            const int n = Count(1.3f);
+            Noise noise(61);
+            LowPass lp(3000.0f);
+            float phase = 0.0f;
+            std::vector<float> x(static_cast<size_t>(n));
+            for (size_t i = 0; i < x.size(); ++i)
+            {
+                const float t = Time(static_cast<int>(i));
+                const float local = std::fmod(t, 0.4f);
+                const float gate = t < 1.2f ? std::sin(kPi * std::min(1.0f, local / 0.34f)) : 0.0f;
+                const float f = 700.0f + 1300.0f * local / 0.4f + 40.0f * std::sin(kTwoPi * 45.0f * t);
+                phase += kTwoPi * f / static_cast<float>(kRate);
+                const float tone = std::sin(phase) + 0.4f * std::sin(2.0f * phase);
+                x[i] = (tone * 0.35f + lp.Process(noise.Next()) * 0.25f) * gate * 0.9f;
+            }
+            return ToPcm(x);
+        }
+
+        PcmSound TriceratopsBellow()
+        {
+            const int n = Count(1.4f);
+            Noise noise(62);
+            LowPass lp(400.0f);
+            float phase = 0.0f;
+            std::vector<float> x(static_cast<size_t>(n));
+            for (size_t i = 0; i < x.size(); ++i)
+            {
+                const float t = Time(static_cast<int>(i));
+                const float f = 115.0f - 30.0f * t / 1.4f + 6.0f * std::sin(kTwoPi * 7.0f * t);
+                phase += kTwoPi * f / static_cast<float>(kRate);
+                const float env = std::min(1.0f, t * 8.0f) * std::min(1.0f, (1.4f - t) * 3.0f);
+                const float tone = std::sin(phase) + 0.6f * std::sin(2.0f * phase) + 0.35f * std::sin(3.0f * phase);
+                x[i] = (tone * 0.4f + lp.Process(noise.Next()) * 1.5f) * env * 0.8f;
+            }
+            return ToPcm(x);
+        }
+
+        PcmSound ProtoceratopsChirp()
+        {
+            const int n = Count(0.5f);
+            std::vector<float> x(static_cast<size_t>(n));
+            float phase = 0.0f;
+            for (size_t i = 0; i < x.size(); ++i)
+            {
+                const float t = Time(static_cast<int>(i));
+                const float local = std::fmod(t, 0.22f);
+                const float gate = t < 0.44f ? std::sin(kPi * std::min(1.0f, local / 0.15f)) : 0.0f;
+                phase += kTwoPi * (1500.0f + 900.0f * std::min(1.0f, local / 0.15f)) / static_cast<float>(kRate);
+                x[i] = std::sin(phase) * gate * 0.4f;
+            }
+            return ToPcm(x);
+        }
+
+        // Three crunchy bites.
+        PcmSound Chew()
+        {
+            const int n = Count(0.7f);
+            Noise noise(63);
+            LowPass lp(1800.0f);
+            std::vector<float> x(static_cast<size_t>(n));
+            for (size_t i = 0; i < x.size(); ++i)
+            {
+                const float t = Time(static_cast<int>(i));
+                const float local = std::fmod(t, 0.22f);
+                const float env = t < 0.66f ? std::min(1.0f, local * 200.0f) * std::exp(-local * 22.0f) : 0.0f;
+                x[i] = lp.Process(noise.Next()) * env * 2.2f;
+            }
+            return ToPcm(x);
+        }
+
     } // namespace
 
     std::unordered_map<std::string, PcmSound> SynthesizeAll()
@@ -316,6 +389,10 @@ namespace audio
         sounds["door"] = Door();
         sounds["flashlight"] = Flashlight();
         sounds["raptor_roar"] = RaptorRoar();
+        sounds["raptor_call"] = RaptorCall();
+        sounds["triceratops_bellow"] = TriceratopsBellow();
+        sounds["protoceratops_chirp"] = ProtoceratopsChirp();
+        sounds["chew"] = Chew();
         return sounds;
     }
 

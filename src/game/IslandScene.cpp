@@ -1,5 +1,6 @@
 #include "game/IslandScene.h"
 #include "game/Terrain.h"
+#include "game/HerbivoreModel.h"
 #include "game/TreeGen.h"
 #include "gfx/ModelLoader.h"
 #include <algorithm>
@@ -381,6 +382,8 @@ namespace game
 			const glm::vec2 p = randomLandPoint(0.8f, 6.0f);
 			auto &f = add("Fern", {p.x, heightSource.Height(p.x, p.y) - 0.05f, p.y}, glm::vec3(U(0.8f, 1.8f)), fernMesh[i % kFernVariants], -1);
 			f.rotation = yaw();
+			f.script = kScriptPlant;
+			f.scriptParams = {3.0f, 60.0f};
 		}
 
 		for (int i = 0; i < params.rocks; ++i)
@@ -455,6 +458,25 @@ namespace game
 			d.scriptParams = {8.0f, 12.0f};
 		}
 
+		// Herbivore script params = species, speed.
+		const int triMesh = s.AddMesh({"triceratops", kMeshTriceratops, {}});
+		const int protoMesh = s.AddMesh({"protoceratops", kMeshProtoceratops, {}});
+		const int triMat = s.AddMaterial({"triceratops_hide", {0.28f, 0.33f, 0.24f}, 0.0f, 0.7f, {}});
+		const int protoMat = s.AddMaterial({"protoceratops_hide", {0.45f, 0.36f, 0.22f}, 0.0f, 0.7f, {}});
+		for (int i = 0; i < params.triceratops + params.protoceratops; ++i)
+		{
+			const bool large = i < params.triceratops;
+			const HerbivoreSpecies sp = large ? HerbivoreSpecies::Triceratops : HerbivoreSpecies::Protoceratops;
+			const glm::vec3 half = HerbivoreHalfExtents(sp);
+			const glm::vec2 p = randomLandPoint(1.0f, 50.0f);
+			auto &d = add(large ? "Triceratops" : "Protoceratops", {p.x, heightSource.Height(p.x, p.y) + half.y + 0.3f, p.y}, glm::vec3(1.0f), large ? triMesh : protoMesh, large ? triMat : protoMat);
+			d.hasBody = true;
+			d.halfExtents = half;
+			d.health = large ? 300.0f : 60.0f;
+			d.script = kScriptHerbivore;
+			d.scriptParams = {large ? 0.0f : 1.0f, large ? 5.5f : 7.5f};
+		}
+
 		return s;
 	}
 
@@ -466,6 +488,8 @@ namespace game
 		p.grassClumps = 60;
 		p.rocks = 4;
 		p.raptors = 2;
+		p.triceratops = 1;
+		p.protoceratops = 2;
 		p.buildings = 2;
 		p.posts = 8;
 		return MakeIslandScene(p);

@@ -9,6 +9,8 @@ namespace game
 	// Script names and mesh kinds used by generated scenes; registered in Game.
 	inline constexpr const char *kScriptPlayer = "FirstPersonController";
 	inline constexpr const char *kScriptDinosaur = "DinosaurAI";
+	inline constexpr const char *kScriptHerbivore = "HerbivoreAI"; // params: species (0 triceratops, 1 protoceratops), speed
+	inline constexpr const char *kScriptPlant = "Plant";		   // params: bites, regrow seconds
 	inline constexpr const char *kScriptEscape = "EscapeZone";
 	inline constexpr const char *kScriptHealthPickup = "HealthPickup";
 	inline constexpr const char *kScriptWeaponPickup = "WeaponPickup";
@@ -20,6 +22,8 @@ namespace game
 	inline constexpr const char *kScriptLightPost = "LightPost"; // params: intensity, radius, flicker, seed, r, g, b
 	inline constexpr const char *kMeshTerrain = "terrain";
 	inline constexpr const char *kMeshRaptor = "raptor";
+	inline constexpr const char *kMeshTriceratops = "triceratops";
+	inline constexpr const char *kMeshProtoceratops = "protoceratops";
 	inline constexpr const char *kMeshTreeTrunk = "tree_trunk";	  // params: seed
 	inline constexpr const char *kMeshTreeCanopy = "tree_canopy"; // params: seed
 	inline constexpr const char *kMeshFern = "fern";			  // params: seed
@@ -33,6 +37,8 @@ namespace game
 		int grassClumps = 400; // each clump scatters several tufts
 		int rocks = 20;
 		int raptors = 10;
+		int triceratops = 3;
+		int protoceratops = 5;
 		int buildings = 10;
 		int posts = 24;
 	};
