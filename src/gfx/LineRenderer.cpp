@@ -267,6 +267,28 @@ namespace gfx
 		}
 	}
 
+	void LineRenderer::QueueArc(
+		const glm::vec3 &center, const glm::vec3 &axisU, const glm::vec3 &axisV, float radius, float startAngle, float endAngle, const glm::vec3 &color, int segments
+	)
+	{
+		segments = std::max(segments, 1);
+		const float step = (endAngle - startAngle) / float(segments);
+		auto point = [&](float a) { return center + radius * (axisU * std::cos(a) + axisV * std::sin(a)); };
+
+		glm::vec3 prev = point(startAngle);
+		for (int i = 1; i <= segments; ++i)
+		{
+			const glm::vec3 next = point(startAngle + step * float(i));
+			QueueLine({prev, next, color});
+			prev = next;
+		}
+	}
+
+	void LineRenderer::QueueCircle(const glm::vec3 &center, float radius, const glm::vec3 &color, int segments)
+	{
+		QueueArc(center, {1, 0, 0}, {0, 0, 1}, radius, 0.0f, 6.2831853f, color, segments);
+	}
+
 	void LineRenderer::DrawCircle(const glm::vec3 &center, const glm::vec3 &axisU, const glm::vec3 &axisV, float radius, const glm::vec3 &color, int segments)
 	{
 		DrawArc(center, axisU, axisV, radius, 0.0f, 6.2831853f, color, segments);

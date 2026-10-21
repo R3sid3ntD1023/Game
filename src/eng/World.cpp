@@ -79,9 +79,23 @@ namespace eng
 		m_bloodEmitter->Primary().Emit(position, direction, count);
 	}
 
+	void World::EmitNoise(const glm::vec3 &position, float radius, const GameObject *source)
+	{
+		m_noises.push_back({m_nextNoiseId++, position, radius, 0.0f, source});
+	}
+
 	void World::Update(float dt, const gfx::Camera &camera)
 	{
 		m_deltaTime = dt;
+		for (auto &n : m_noises)
+			n.age += dt;
+		if (debugPerception)
+		{
+			// Noise rings expand to their audible radius within a quarter second.
+			for (const auto &n : m_noises)
+				m_lineRenderer.QueueCircle(n.position, n.radius * std::min(1.0f, n.age * 4.0f), {0.2f, 0.8f, 1.0f}, 40);
+		}
+		m_noises.erase(std::remove_if(m_noises.begin(), m_noises.end(), [](const NoiseEvent &n) { return n.age > 1.0f; }), m_noises.end());
 		m_dayNight.Advance(dt);
 		m_windTime += dt;
 

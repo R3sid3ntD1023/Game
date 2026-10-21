@@ -46,6 +46,7 @@ namespace game
         }
 
         --m_ammo;
+        gameObject->GetWorld().EmitNoise(gameObject->GetTransform().position, m_currentStats.automatic ? 80.0f : 55.0f, gameObject);
         m_cooldown = m_currentStats.cooldown;
         if (auto *audio = gameObject->GetWorld().audio)
             audio->Play2D(m_currentStats.automatic ? "gunshot_rifle" : "gunshot_pistol", 0.9f, 0.95f + 0.1f * static_cast<float>(std::rand() % 100) / 100.0f);

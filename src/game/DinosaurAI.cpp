@@ -19,7 +19,7 @@ namespace game
 		m_animator = gameObject->GetComponent<eng::Animator>();
 
 		m_health->SetOnDamageCallback(
-			[this](float /*amount*/)
+			[this](float amount)
 			{
 				if (m_health->Dead())
 				{
@@ -32,7 +32,7 @@ namespace game
 				}
 				else
 				{
-					SetState(DinosaurState::Chasing);
+					m_perception.OnDamaged(amount, m_target.GetTransform().position);
 				}
 			}
 		);
@@ -43,6 +43,10 @@ namespace game
 	void DinosaurAI::OnUpdate(float dt)
 	{
 		m_attackTimer = std::max(0.0f, m_attackTimer - dt);
+
+		m_perception.Update(dt, *gameObject, m_target);
+		if (gameObject->GetWorld().debugPerception)
+			m_perception.DrawDebug(*gameObject, m_target.GetTransform().position);
 
 		UpdateAudio(dt);
 		UpdateAnimation();
@@ -61,6 +65,10 @@ namespace game
 	{
 		m_aiContext.self = gameObject;
 		m_aiContext.blackboard.Add<glm::vec3>("target");
+		m_aiContext.blackboard.Add<glm::vec3>("chaseTarget");
+
+		auto chaseTo = m_behaviorTree.AddNode<ai::MoveTo>();
+		auto wanderTo = m_behaviorTree.AddNode<ai::MoveTo>();
 
 		auto attackCondition = [this](ai::AIContext &ctx)
 		{
@@ -68,13 +76,13 @@ namespace game
 			auto &target = m_target.GetTransform();
 			glm::vec3 dist = target.position - self.position;
 			dist.y = 0.0f;
-			return glm::length(dist) < m_attackRange;
+			return m_perception.Alerted() && glm::length(dist) < m_attackRange;
 		};
 
 		auto attackAction = [this](ai::AIContext &ctx)
 		{
 			SetState(DinosaurState::Attacking);
-
+			m_branch = Branch::Attack;
 			auto &self = ctx.self->GetTransform();
 			auto &target = m_target.GetTransform();
 			glm::vec3 dir = target.position - self.position;
@@ -104,17 +112,30 @@ namespace game
 			return ai::Node::State::Running;
 		};
 
-		auto chaseCondition = [this](ai::AIContext &ctx)
-		{
-			auto &self = ctx.self->GetTransform();
-			auto &target = m_target.GetTransform();
-			float dist = glm::length(target.position - self.position);
-			return (dist >= m_attackRange && dist < m_aggroRange) || m_stateEnum == DinosaurState::Chasing;
-		};
+		auto chaseCondition = [this](ai::AIContext &) { return m_perception.Alerted(); };
 
-		auto chaseAction = [this](ai::AIContext &ctx)
+		auto chaseAction = [this, chaseTo](ai::AIContext &ctx)
 		{
-			ctx.blackboard.Set<glm::vec3>("target", m_target.GetTransform().position);
+			if (m_branch != Branch::Chase)
+			{
+				m_branch = Branch::Chase;
+				chaseTo->Restart();
+			}
+
+			const glm::vec3 goal = m_perception.LastKnownPosition();
+			glm::vec3 toGoal = goal - ctx.self->GetTransform().position;
+			toGoal.y = 0.0f;
+			if (!m_perception.SeesTarget() && glm::length(toGoal) < 2.0f)
+			{
+				// Reached the last known spot and found nothing: stand and look around until the memory runs out.
+				m_body->velocity.x = m_body->velocity.z = 0.0f;
+				ctx.blackboard.Clear("chaseTarget");
+				m_perception.NotifyArrived();
+				SetState(DinosaurState::Idle);
+				return ai::Node::State::Running;
+			}
+
+			ctx.blackboard.Set<glm::vec3>("chaseTarget", goal);
 			SetState(DinosaurState::Chasing);
 			return ai::Node::State::Success;
 		};
@@ -147,9 +168,8 @@ namespace game
 		chase->SetName("Chase");
 		chase->SetAction(chaseAction);
 
-		auto chaseTo = m_behaviorTree.AddNode<ai::MoveTo>();
 		chaseTo->SetName("ChaseTo");
-		chaseTo->m_target = "target";
+		chaseTo->m_target = "chaseTarget";
 		chaseTo->m_speed = m_speed;
 
 		auto chaseSequence = m_behaviorTree.AddNode<ai::Sequence>();
@@ -162,7 +182,6 @@ namespace game
 		auto wanderSequence = m_behaviorTree.AddNode<ai::Sequence>();
 		wanderSequence->SetName("WanderSequence");
 
-		auto wanderTo = m_behaviorTree.AddNode<ai::MoveTo>();
 		wanderTo->SetName("WanderTo");
 		wanderTo->m_target = "target";
 		wanderTo->m_speed = m_speed * 0.3f;
@@ -170,8 +189,13 @@ namespace game
 		auto wanderAction = m_behaviorTree.AddNode<ai::Action>();
 		wanderAction->SetName("WanderAction");
 		wanderAction->SetAction(
-			[this](ai::AIContext & /*ctx*/)
+			[this, wanderTo](ai::AIContext & /*ctx*/)
 			{
+				if (m_branch != Branch::Wander)
+				{
+					m_branch = Branch::Wander;
+					wanderTo->Restart();
+				}
 				SetState(DinosaurState::Wandering);
 				return ai::Node::State::Success;
 			}
@@ -203,9 +227,9 @@ namespace game
 		chaseSequence->AddChild(chase);
 		chaseSequence->AddChild(chaseTo);
 
+		prioritySelector->AddChild(attackSequence);
+		prioritySelector->AddChild(chaseSequence);
 		prioritySelector->AddChild(findPointSelector);
-		// prioritySelector->AddChild(attackSequence);
-		// prioritySelector->AddChild(chaseSequence);
 		root->SetChild(prioritySelector);
 
 		m_behaviorTree.SetRoot(root);

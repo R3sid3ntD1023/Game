@@ -70,6 +70,12 @@ namespace gfx
 			const glm::vec3 &center, const glm::vec3 &axisU, const glm::vec3 &axisV, float radius, float startAngle, float endAngle, const glm::vec3 &color, int segments = 12
 		);
 
+		// Same shapes as DrawArc / DrawCircle, but submitted as one-frame queued lines (callable from Update).
+		void QueueArc(
+			const glm::vec3 &center, const glm::vec3 &axisU, const glm::vec3 &axisV, float radius, float startAngle, float endAngle, const glm::vec3 &color, int segments = 12
+		);
+		void QueueCircle(const glm::vec3 &center, float radius, const glm::vec3 &color, int segments = 32);
+
 		void DrawSphere(const glm::vec3 &center, float radius, const glm::vec3 &color, int segments = 24);
 
 		// Capsule between the two hemisphere centers p0 and p1.

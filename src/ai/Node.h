@@ -57,6 +57,8 @@ namespace ai
 			return m_state;
 		}
 
+		void Restart() { m_started = false; } // forget a half-finished run so OnStart fires again (used when a branch is interrupted)
+
 		virtual void OnStart(AIContext &) {}
 
 		void Reset() { m_state = State::Running; }

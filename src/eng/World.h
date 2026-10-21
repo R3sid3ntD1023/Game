@@ -46,6 +46,19 @@ namespace eng
 		// Sprays blood from a shared one-shot emitter object (created on first use).
 		void EmitBlood(const glm::vec3 &position, const glm::vec3 &direction, int count);
 
+		// A sound AI can hear: audible within `radius` metres. Events live for about a second so every listener sees them once.
+		struct NoiseEvent
+		{
+			uint32_t id = 0;
+			glm::vec3 position{0.0f};
+			float radius = 0.0f;
+			float age = 0.0f;
+			const GameObject *source = nullptr;
+		};
+		void EmitNoise(const glm::vec3 &position, float radius, const GameObject *source = nullptr);
+		const std::vector<NoiseEvent> &Noises() const { return m_noises; }
+		bool debugPerception = false; // draws AI sight cones, hearing ranges and awareness
+
 		void RegisterParticles(ParticleSystemComponent *e) { m_particleComponents.push_back(e); }
 		void UnregisterParticles(ParticleSystemComponent *e);
 
@@ -111,6 +124,8 @@ namespace eng
 		bool m_navMeshVisible = false;
 		bool m_navDebugDirty = false;
 		int m_navDebugMode = 0;
+		std::vector<NoiseEvent> m_noises;
+		uint32_t m_nextNoiseId = 1;
 		float m_windTime = 0.0f;
 		glm::vec2 m_windDirection{0.85f, 0.35f};
 

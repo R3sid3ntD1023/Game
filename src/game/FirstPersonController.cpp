@@ -146,6 +146,7 @@ namespace game
 		while (variant == m_lastStep);
 		m_lastStep = variant;
 		audio->Play2D("footstep_" + std::to_string(variant), m_sprint ? 0.9f : 0.6f, 0.9f + 0.2f * static_cast<float>(std::rand() % 100) / 100.0f);
+		gameObject->GetWorld().EmitNoise(gameObject->GetTransform().position, m_sprint ? 18.0f : 8.0f, gameObject);
 	}
 
 	void FirstPersonController::Shoot()

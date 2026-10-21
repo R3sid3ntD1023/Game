@@ -376,6 +376,12 @@ namespace game
 						clock.SetTime(clock.timeOfDay - scrub);
 					if (input.IsKeyDown(GLFW_KEY_RIGHT_BRACKET))
 						clock.SetTime(clock.timeOfDay + scrub);
+					// F5 toggles the AI perception overlay (sight cones, touch range, awareness bars, noises).
+					static bool prevF5 = false;
+					const bool f5 = input.IsKeyDown(GLFW_KEY_F5);
+					if (f5 && !prevF5)
+						m_world->debugPerception = !m_world->debugPerception;
+					prevF5 = f5;
 					static bool prevF3 = false;
 					const bool f3 = input.IsKeyDown(GLFW_KEY_F3);
 					if (f3 && !prevF3)

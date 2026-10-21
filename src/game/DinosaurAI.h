@@ -6,6 +6,7 @@
 #include "eng/GameObject.h"
 #include "eng/RigidBody.h"
 #include "eng/Script.h"
+#include "game/AIPerception.h"
 #include "game/GameState.h"
 #include <glm/glm.hpp>
 
@@ -20,7 +21,8 @@ namespace game
 		Dead
 	};
 
-	// Placeholder dinosaur brain: wander, chase the player when close, bite when in range.
+	// Brain: sight, hearing, touch and damage feed AIPerception; once alerted it chases the last known position
+	// and bites in range, otherwise it wanders.
 	class DinosaurAI : public eng::Script
 	{
 	public:
@@ -55,9 +57,12 @@ namespace game
 		float m_damage;
 		float m_attackTimer = 0.0f;
 		float m_stepDistance = 0.0f;
-		float m_aggroRange = 35.0f;
 		float m_attackRange = 3.2f;
 
+		enum class Branch { None, Attack, Chase, Wander };
+		Branch m_branch = Branch::None;
+
+		AIPerception m_perception;
 		ai::AIContext m_aiContext;
 		ai::BehaviorTree m_behaviorTree;
 
