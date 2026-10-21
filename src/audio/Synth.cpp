@@ -277,11 +277,31 @@ namespace audio
             return ToPcm(x);
         }
 
+        // A sharp crack followed by a rolling low rumble made of several decaying swells.
+        PcmSound Thunder()
+        {
+            const int n = Count(5.0f);
+            Noise noise(77);
+            LowPass rumble1(120.0f), rumble2(70.0f), crack(1800.0f);
+            std::vector<float> x(static_cast<size_t>(n));
+            for (size_t i = 0; i < x.size(); ++i)
+            {
+                const float t = Time(static_cast<int>(i));
+                const float r = noise.Next();
+                const float swell = 0.6f * std::exp(-t * 0.9f) + 0.4f * std::exp(-std::fmod(t, 1.1f) * 3.0f) * std::exp(-t * 0.5f);
+                const float body = rumble2.Process(rumble1.Process(r)) * 9.0f * swell;
+                const float snap = crack.Process(r) * std::exp(-t * 18.0f) * 1.4f;
+                x[i] = (body + snap) * std::min(1.0f, t * 40.0f) * std::min(1.0f, (5.0f - t) * 2.0f);
+            }
+            return ToPcm(x);
+        }
+
     } // namespace
 
     std::unordered_map<std::string, PcmSound> SynthesizeAll()
     {
         std::unordered_map<std::string, PcmSound> sounds;
+        sounds["thunder"] = Thunder();
         sounds["rain_loop"] = Rain();
         sounds["wind_loop"] = Wind();
         for (int v = 0; v < 4; ++v)

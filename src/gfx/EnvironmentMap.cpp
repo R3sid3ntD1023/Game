@@ -218,6 +218,10 @@ namespace gfx
         m_sky.SetInt("uProcedural", 1);
         m_sky.SetInt("uBake", 1);
         m_sky.SetVec3("uSunDir", m_sunDir);
+        m_sky.SetFloat("uOvercast", m_overcast);
+        m_sky.SetFloat("uDark", m_dark);
+        m_sky.SetFloat("uTime", m_time);
+        m_sky.SetFloat("uFlash", m_flash);
         m_sky.SetVec3("uCameraPos", glm::vec3(0.0f));
         m_vao.Bind();
         for (int face = 0; face < 6; ++face)
@@ -245,6 +249,23 @@ namespace gfx
         if (glm::dot(m_sunDir, m_bakedSunDir) < 0.99966f) // ~1.5 degrees
         {
             m_bakedSunDir = m_sunDir;
+            BakeProceduralCube();
+            BuildLighting();
+        }
+    }
+
+    void EnvironmentMap::SetWeather(float overcast, float dark, float time, float flash)
+    {
+        m_overcast = overcast;
+        m_dark = dark;
+        m_time = time;
+        m_flash = flash;
+        if (!m_procedural)
+            return;
+        if (std::abs(overcast - m_bakedOvercast) > 0.05f || std::abs(dark - m_bakedDark) > 0.05f)
+        {
+            m_bakedOvercast = overcast;
+            m_bakedDark = dark;
             BakeProceduralCube();
             BuildLighting();
         }
@@ -308,7 +329,10 @@ namespace gfx
         m_sky.SetInt("uProcedural", m_procedural ? 1 : 0);
         m_sky.SetInt("uBake", 0);
         m_sky.SetVec3("uSunDir", m_sunDir);
-        glBindTextureUnit(6, m_env);
+        m_sky.SetFloat("uOvercast", m_overcast);
+        m_sky.SetFloat("uDark", m_dark);
+        m_sky.SetFloat("uTime", m_time);
+        m_sky.SetFloat("uFlash", m_flash);
         m_vao.Bind();
         glDepthFunc(GL_LEQUAL);
         glDrawArrays(GL_TRIANGLES, 0, 3);

@@ -6,6 +6,7 @@
 #include "eng/NavigationGrid.h"
 #include "eng/ParticleSystemComponent.h"
 #include "eng/Physics.h"
+#include "eng/Weather.h"
 #include "gfx/Camera.h"
 #include "gfx/EnvironmentMap.h"
 #include "gfx/ForwardPlus.h"
@@ -102,12 +103,27 @@ namespace eng
 		const DayNightCycle &DayNight() const { return m_dayNight; }
 		void SetTimeOfDay(float hours) { m_dayNight.SetTime(hours); }
 		void SetNavMeshVisible(bool visible);
-		// Foliage wind: direction on the XZ plane, length is the strength (0..1).
+		// Foliage wind: direction on the XZ plane, length is the strength (0..1). The weather scales it.
 		void SetWind(const glm::vec2 &direction) { m_windDirection = direction; }
+
+		// Weather: sunny / cloudy / light rain / storm, each lasting a set time and blending into the next.
+		// It drives sky cover, light levels, wind, island-wide rain, lightning and thunder.
+		WeatherSystem &Weather() { return m_weather; }
+		const WeatherSystem &Weather() const { return m_weather; }
 		bool IsNavGridVisible() const { return m_navGridVisible; }
 		bool IsNavMeshVisible() const { return m_navMeshVisible; }
 
 	private:
+		void UpdateWeather(float dt, const gfx::Camera &camera);
+		void BuildBolt(const glm::vec3 &cameraPos, const LightningStrike &strike);
+
+		WeatherSystem m_weather;
+		GameObject *m_rainObject = nullptr;
+		GameObject *m_windObject = nullptr;
+		float m_weatherLookupTimer = 0.0f;
+		std::vector<std::pair<glm::vec3, glm::vec3>> m_boltSegments;
+		float m_boltTimer = 0.0f;
+
 		void RebuildNavDebug();
 		void UpdateNavDebugVisibility(const glm::vec3 &cameraPos);
 

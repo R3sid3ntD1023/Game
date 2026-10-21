@@ -28,6 +28,9 @@ namespace gfx
         // `toSun` points from the viewer towards the sun (the moon is opposite). The image-based lighting is
         // re-baked once the sun has moved about 1.5 degrees since the last bake.
         void SetSunDirection(const glm::vec3 &toSun);
+        // Clouds: `overcast` and `dark` are 0..1, `time` drifts the layer, `flash` is lightning brightness.
+        // The lighting cube is re-baked when overcast/dark change noticeably, so the ambient light follows.
+        void SetWeather(float overcast, float dark, float time, float flash);
 
     private:
         GLuint LoadEquirect(const std::string &path) const;
@@ -37,6 +40,8 @@ namespace gfx
         bool m_procedural = false;
         glm::vec3 m_sunDir{0.0f, 1.0f, 0.0f};
         glm::vec3 m_bakedSunDir{0.0f, -1.0f, 0.0f};
+        float m_overcast = 0.0f, m_dark = 0.0f, m_time = 0.0f, m_flash = 0.0f;
+        float m_bakedOvercast = 0.0f, m_bakedDark = 0.0f;
         GLuint m_env = 0;
         GLuint m_irradiance = 0;
         GLuint m_prefilter = 0;

@@ -18,6 +18,8 @@ public:
     ParticleSystem& AddSystem();
     ParticleSystem& Primary() { return *m_systems.front(); }
     void Collect(gfx::ParticleRenderer& renderer);
+    // Multiplies the emission rate of every emitting system (e.g. rain intensity).
+    void SetEmissionScale(float scale);
 
     bool enabled = true;
     bool followCamera = false; // emitter origin tracks the world camera instead of the GameObject
@@ -29,8 +31,9 @@ private:
 };
 
 // Ready-made setups for the effects the game uses.
-// Rain: streaks falling through a box that follows the camera, splashing on the ground. `amount` is 0..1.
-void ConfigureRain(ParticleSystemComponent& c, float amount, const glm::vec3& wind);
+// Rain: streaks falling over the whole island, splashing on the ground. Drops are spawned within `areaSize` metres
+// of the camera and then live in the world. `amount` is 0..1; the weather system scales it.
+void ConfigureRain(ParticleSystemComponent& c, float amount, const glm::vec3& wind, float areaSize = 150.0f);
 // Blood: droplets that arc out of Emit() calls and splat on the ground.
 void ConfigureBlood(ParticleSystemComponent& c);
 

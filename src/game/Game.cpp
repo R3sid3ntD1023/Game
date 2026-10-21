@@ -382,6 +382,11 @@ namespace game
 					if (f5 && !prevF5)
 						m_world->debugPerception = !m_world->debugPerception;
 					prevF5 = f5;
+					static bool prevF6 = false;
+					const bool f6 = input.IsKeyDown(GLFW_KEY_F6);
+					if (f6 && !prevF6)
+						m_world->Weather().Cycle();
+					prevF6 = f6;
 					static bool prevF3 = false;
 					const bool f3 = input.IsKeyDown(GLFW_KEY_F3);
 					if (f3 && !prevF3)
@@ -448,10 +453,11 @@ namespace game
 			titleTimer += dt;
 			if (titleTimer >= 0.25)
 			{
-				m_window.SetTitle(std::format("Escape the Island | {} fps | {} draws | {:02d}:{:02d}", static_cast<int>(frames / titleTimer), m_world ? m_world->DrawCalls() : 0,
+				m_window.SetTitle(std::format("Escape the Island | {} fps | {} draws | {:02d}:{:02d} | {}", static_cast<int>(frames / titleTimer), m_world ? m_world->DrawCalls() : 0,
 											  m_world ? static_cast<int>(m_world->DayNight().timeOfDay) : 0,
-											  m_world ? static_cast<int>(std::fmod(m_world->DayNight().timeOfDay, 1.0f) * 60.0f) : 0));
-				frames = 0;
+											  m_world ? static_cast<int>(std::fmod(m_world->DayNight().timeOfDay, 1.0f) 											  * 60.0f) : 0,
+											  											  m_world ? WeatherName(m_world->Weather().Current()) : ""));
+											  				frames = 0;
 				titleTimer = 0.0;
 			}
 		}

@@ -1,5 +1,7 @@
 #include "eng/World.h"
 #include "eng/BuiltinComponents.h"
+#include "eng/AudioSource.h"
+#include <random>
 #include <algorithm>
 #include <cmath>
 
@@ -84,9 +86,113 @@ namespace eng
 		m_noises.push_back({m_nextNoiseId++, position, radius, 0.0f, source});
 	}
 
+	namespace
+	{
+		float RandRange(std::mt19937 &rng, float a, float b) { return std::uniform_real_distribution<float>(a, b)(rng); }
+
+		void Subdivide(std::mt19937 &rng, std::vector<glm::vec3> &pts, float offset, int levels)
+		{
+			for (int l = 0; l < levels; ++l)
+			{
+				std::vector<glm::vec3> next;
+				next.reserve(pts.size() * 2);
+				for (size_t i = 0; i + 1 < pts.size(); ++i)
+				{
+					glm::vec3 mid = (pts[i] + pts[i + 1]) * 0.5f;
+					mid.x += RandRange(rng, -offset, offset);
+					mid.z += RandRange(rng, -offset, offset);
+					next.push_back(pts[i]);
+					next.push_back(mid);
+				}
+				next.push_back(pts.back());
+				pts = std::move(next);
+				offset *= 0.55f;
+			}
+		}
+	} // namespace
+
+	// Jagged bolt from the cloud deck to the ground by midpoint displacement, with a couple of side branches.
+	void World::BuildBolt(const glm::vec3 &cameraPos, const LightningStrike &strike)
+	{
+		static std::mt19937 rng(777u);
+		glm::vec3 base = cameraPos + glm::vec3(std::cos(strike.azimuth), 0.0f, std::sin(strike.azimuth)) * strike.distance;
+		base.y = GetTerrainHeight(base.x, base.z);
+		const glm::vec3 top = base + glm::vec3(RandRange(rng, -25.0f, 25.0f), 190.0f, RandRange(rng, -25.0f, 25.0f));
+
+		std::vector<glm::vec3> main{top, base};
+		Subdivide(rng, main, 16.0f, 6);
+
+		m_boltSegments.clear();
+		for (size_t i = 0; i + 1 < main.size(); ++i)
+			m_boltSegments.push_back({main[i], main[i + 1]});
+
+		for (int b = 0; b < 3; ++b)
+		{
+			const size_t at = static_cast<size_t>(RandRange(rng, 0.15f, 0.7f) * static_cast<float>(main.size()));
+			const glm::vec3 start = main[std::min(at, main.size() - 1)];
+			const glm::vec3 end = start + glm::vec3(RandRange(rng, -40.0f, 40.0f), -RandRange(rng, 30.0f, 70.0f), RandRange(rng, -40.0f, 40.0f));
+			std::vector<glm::vec3> branch{start, end};
+			Subdivide(rng, branch, 8.0f, 4);
+			for (size_t i = 0; i + 1 < branch.size(); ++i)
+				m_boltSegments.push_back({branch[i], branch[i + 1]});
+		}
+		m_boltTimer = 0.6f;
+	}
+
+	void World::UpdateWeather(float dt, const gfx::Camera &camera)
+	{
+		m_weather.Update(dt);
+		const WeatherProfile &w = m_weather.Blend();
+
+		// Rain falls over the whole island; the weather only sets its intensity.
+		m_weatherLookupTimer -= dt;
+		if ((!m_rainObject || !m_windObject) && m_weatherLookupTimer <= 0.0f)
+		{
+			m_weatherLookupTimer = 2.0f;
+			if (!m_rainObject)
+				m_rainObject = Find("Rain");
+			if (!m_windObject)
+				m_windObject = Find("Wind");
+		}
+
+		static std::mt19937 rng(4242u);
+		if (m_rainObject)
+		{
+			if (auto *particles = m_rainObject->GetComponent<ParticleSystemComponent>())
+				particles->SetEmissionScale(w.rain);
+			if (auto *sound = m_rainObject->GetComponent<AudioSource>())
+				sound->SetVolume(0.55f * (0.35f + 0.65f * w.rain) * (w.rain > 0.01f ? 1.0f : 0.0f));
+		}
+		if (m_windObject)
+			if (auto *sound = m_windObject->GetComponent<AudioSource>())
+				sound->SetVolume(0.4f * std::clamp(w.wind / 1.1f, 0.25f, 1.6f));
+
+		LightningStrike strike;
+		if (m_weather.TakeStrike(strike))
+			BuildBolt(camera.position, strike);
+		float thunderVolume = 0.0f;
+		if (m_weather.TakeThunder(thunderVolume) && audio)
+			audio->Play2D("thunder", thunderVolume, 0.9f + 0.2f * RandRange(rng, 0.0f, 1.0f));
+
+		// The bolt flickers with the flash and is gone after about half a second.
+		if (m_boltTimer > 0.0f)
+		{
+			m_boltTimer -= dt;
+			const float f = m_weather.Flash();
+			if (f > 0.08f)
+			{
+				const glm::vec3 color = glm::vec3(0.85f, 0.9f, 1.0f) * std::min(1.0f, 0.35f + f);
+				for (const auto &[a, b] : m_boltSegments)
+					for (const glm::vec3 off : {glm::vec3(0.0f), glm::vec3(0.35f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.35f)})
+						m_lineRenderer.QueueLine({a + off, b + off, color});
+			}
+		}
+	}
+
 	void World::Update(float dt, const gfx::Camera &camera)
 	{
 		m_deltaTime = dt;
+		UpdateWeather(dt, camera);
 		for (auto &n : m_noises)
 			n.age += dt;
 		if (debugPerception)
@@ -131,10 +237,14 @@ namespace eng
 		const glm::mat4 proj = camera.Projection(aspect);
 		const glm::mat4 viewProj = proj * view;
 
-		m_renderer.SetWind(m_windTime, m_windDirection);
+		m_renderer.SetWind(m_windTime, m_windDirection * m_weather.Blend().wind);
 		m_renderer.Build(m_registry);
 
-		// Sun and moon from the clock replace scene-authored directional lights.
+		const WeatherProfile &weather = m_weather.Blend();
+		if (environment)
+			environment->SetWeather(weather.cloud, weather.dark, m_windTime, m_weather.Flash());
+
+		// Sun and moon from the clock replace scene-authored directional lights; clouds dim them.
 		const bool cycle = m_dayNight.enabled;
 		const glm::vec3 sunDir = m_dayNight.SunDirection();
 		if (cycle && environment)
@@ -145,12 +255,12 @@ namespace eng
 		if (cycle)
 		{
 			const float sunElev = sunDir.y;
-			const float sunI = 3.0f * glm::smoothstep(-0.02f, 0.15f, sunElev);
+			const float sunI = 3.0f * glm::smoothstep(-0.02f, 0.15f, sunElev) * weather.light;
 			sun.type = gfx::LightType::Directional;
 			sun.direction = -sunDir;
 			sun.color = glm::mix(glm::vec3(1.0f, 0.55f, 0.3f), glm::vec3(1.0f, 0.96f, 0.85f), glm::smoothstep(0.0f, 0.4f, sunElev)) * sunI;
 
-			const float moonI = glm::smoothstep(-0.02f, 0.15f, -sunElev);
+			const float moonI = glm::smoothstep(-0.02f, 0.15f, -sunElev) * glm::mix(1.0f, weather.light, 0.7f);
 			moon.type = gfx::LightType::Directional;
 			moon.direction = sunDir;
 			moon.color = glm::vec3(0.35f, 0.42f, 0.65f) * moonI;
@@ -190,6 +300,15 @@ namespace eng
 					lights.push_back(sun);
 				if (glm::length(moon.color) > 0.001f)
 					lights.push_back(moon);
+			}
+			if (m_weather.Flash() > 0.01f)
+			{
+				// Lightning lights the whole scene from above for a split second.
+				gfx::LightData bolt;
+				bolt.type = gfx::LightType::Directional;
+				bolt.direction = glm::normalize(glm::vec3(0.2f, -1.0f, 0.3f));
+				bolt.color = glm::vec3(0.7f, 0.78f, 1.0f) * (6.0f * m_weather.Flash());
+				lights.push_back(bolt);
 			}
 			m_registry.view<Transform, Light>().each(
 				[&](const Transform &t, const Light &l)

@@ -8,6 +8,12 @@ layout(binding = 6) uniform samplerCube uEnvMap;
 uniform int uProcedural; // 0 = sample uEnvMap (HDR), 1 = analytic day/night sky
 uniform int uBake;       // 1 = rendering the IBL source cube: no stars or discs
 uniform vec3 uSunDir;    // unit vector towards the sun; the moon sits opposite
+uniform float uOvercast; // 0 clear .. 1 fully clouded
+uniform float uDark;     // 0 light grey clouds .. 1 storm clouds
+uniform float uTime;     // seconds, drifts the cloud layer
+uniform float uFlash;    // lightning brightness, lights the clouds from within
+
+#include "noise.glsl"
 
 const float STAR_CELLS = 70.0;    // cells per cube-face half width
 const float STAR_DENSITY = 0.07;  // fraction of cells holding a star
@@ -98,20 +104,39 @@ void main() {
     float twilight = exp(-pow(sunElev / 0.16, 2.0));
     vec3 color = SkyGradient(d, daylight, twilight);
 
+    // Overcast drains the colour towards grey (also baked into the lighting cube, so ambient light follows the weather).
+    float lum = dot(color, vec3(0.3, 0.55, 0.15));
+    vec3 grey = vec3(lum) * mix(0.9, 0.4, uDark);
+    color = mix(color, grey, uOvercast * 0.85);
+
     if (uBake == 0) {
         float aboveHorizon = smoothstep(-0.01, 0.02, d.y);
+        float clear = 1.0 - uOvercast;
 
         float sd = dot(d, uSunDir);
         vec3 sunColor = mix(vec3(1.0, 0.55, 0.25), vec3(1.0, 0.95, 0.8), smoothstep(0.0, 0.4, sunElev));
-        color += sunColor * (40.0 * smoothstep(0.99985, 0.99995, sd) + 0.6 * pow(max(sd, 0.0), 220.0)) * aboveHorizon;
+        color += sunColor * (40.0 * smoothstep(0.99985, 0.99995, sd) + 0.6 * pow(max(sd, 0.0), 220.0)) * aboveHorizon * clear * clear;
 
         float night = 1.0 - smoothstep(-0.2, 0.02, sunElev);
         float md = max(dot(d, -uSunDir), 0.0);
-        float moonVis = (1.0 - daylight) * aboveHorizon;
+        float moonVis = (1.0 - daylight) * aboveHorizon * clear * clear;
         color += vec3(6.0, 6.5, 8.0) * smoothstep(0.9988, 0.9992, md) * moonVis;
         color += vec3(0.5, 0.6, 0.9) * 0.12 * pow(md, 120.0) * moonVis;
 
-        color += Stars(d, pixelAngle) * night * smoothstep(0.0, 0.08, d.y);
+        color += Stars(d, pixelAngle) * night * smoothstep(0.0, 0.08, d.y) * clear * clear;
+
+        // Cloud layer projected onto a flat deck; coverage grows with uOvercast.
+        if (d.y > 0.0 && uOvercast > 0.01) {
+            vec2 cuv = d.xz / (d.y + 0.2) * 0.9 + vec2(uTime * 0.012, uTime * 0.005);
+            float n = Fbm(cuv) * 0.65 + 0.35 * Fbm(cuv * 3.1 + 5.0);
+            float edge = mix(0.72, 0.18, uOvercast);
+            float dens = smoothstep(edge, edge + 0.22, n) * smoothstep(0.0, 0.12, d.y);
+            float lit = mix(0.25, 1.0, smoothstep(0.1, 0.7, n)); // thick centres are darker
+            vec3 cloudCol = vec3(mix(0.05, 0.75, daylight)) * mix(1.0, 0.3, uDark) * mix(1.0, 0.65, (1.0 - lit) * 0.6);
+            cloudCol += vec3(1.0, 0.45, 0.2) * twilight * 0.25 * (1.0 - uDark);
+            cloudCol += vec3(0.7, 0.78, 1.0) * uFlash * (1.2 + 3.0 * (1.0 - lit)) ;
+            color = mix(color, cloudCol, dens);
+        }
     }
 
     outColor = vec4(color, 1.0);

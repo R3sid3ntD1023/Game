@@ -48,6 +48,13 @@ namespace eng
 			s->Update(dt, ground);
 	}
 
+	void ParticleSystemComponent::SetEmissionScale(float scale)
+	{
+		for (auto &s : m_systems)
+			if (s->emission.enabled)
+				s->emission.rateMultiplier = scale;
+	}
+
 	void ParticleSystemComponent::Collect(gfx::ParticleRenderer &renderer)
 	{
 		if (!enabled)
@@ -56,16 +63,18 @@ namespace eng
 			s->Collect(renderer);
 	}
 
-	void ConfigureRain(ParticleSystemComponent &c, float amount, const glm::vec3 &wind)
+	void ConfigureRain(ParticleSystemComponent &c, float amount, const glm::vec3 &wind, float areaSize)
 	{
+		// Rain falls island-wide: drops spawn in a box around the camera (so only what can be seen is simulated) but
+		// are free in the world once spawned, so nothing moves with the player.
 		c.followCamera = true;
-		c.prewarmSeconds = 2.0f;
+		c.prewarmSeconds = 2.5f;
 
 		ParticleSystem &splash = c.AddSystem();
 		splash.main.startLifetime = 0.35f;
 		splash.main.startSize = 0.06f;
 		splash.main.startColor = {0.7f, 0.78f, 0.9f, 0.4f};
-		splash.main.maxParticles = 500;
+		splash.main.maxParticles = 2000;
 		splash.emission.enabled = false;
 		splash.sizeOverLifetime = {true, 1.0f, 6.0f};
 		splash.colorOverLifetime.enabled = true;
@@ -73,16 +82,16 @@ namespace eng
 		splash.renderer.mode = gfx::ParticleMode::Ring;
 
 		ParticleSystem &drops = c.AddSystem();
-		drops.main.startLifetime = 2.0f;
+		drops.main.startLifetime = 2.6f;
 		drops.main.startSpeed = {16.0f, 24.0f};
 		drops.main.startSize = 0.001f;
 		drops.main.startColor = {0.55f, 0.62f, 0.75f, 0.22f};
-		drops.main.maxParticles = 6000;
-		drops.emission.rateOverTime = 5000.0f;
+		drops.main.maxParticles = 30000;
+		drops.emission.rateOverTime = 14000.0f;
 		drops.emission.rateMultiplier = amount;
 		drops.shape.type = ParticleSystem::ShapeModule::Type::Box;
-		drops.shape.offset = {0.0f, 19.0f, 0.0f};
-		drops.shape.boxSize = {52.0f, 14.0f, 52.0f};
+		drops.shape.offset = {0.0f, 32.0f, 0.0f};
+		drops.shape.boxSize = {areaSize, 16.0f, areaSize};
 		drops.shape.direction = {0.0f, -1.0f, 0.0f};
 		drops.velocityOverLifetime = {true, wind};
 		drops.collision.enabled = true;
