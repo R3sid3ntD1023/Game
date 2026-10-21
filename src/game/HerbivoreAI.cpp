@@ -1,7 +1,9 @@
 #include "game/HerbivoreAI.h"
 #include "ai/Nodes.h"
 #include "eng/World.h"
+#include "game/CarnivoreAI.h"
 #include "game/DinosaurAI.h"
+#include "game/Survival.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -66,6 +68,7 @@ namespace game
 					gameObject->Destroy();
 					return;
 				}
+				m_hurtTimer = kRecentlyHurtSeconds;
 				if (!m_animalDamage)
 					m_panicTimer = 6.0f;
 			}
@@ -99,6 +102,9 @@ namespace game
 
 		m_goreTimer = std::max(0.0f, m_goreTimer - dt);
 		m_panicTimer = std::max(0.0f, m_panicTimer - dt);
+		m_hurtTimer = std::max(0.0f, m_hurtTimer - dt);
+		if (m_stateEnum == HerbivoreState::Sleeping)
+			m_health->Heal(m_health->max * kSleepHealPerSecond * dt);
 		m_hunger = std::min(1.0f, m_hunger + dt / 70.0f);
 		if (m_claimed && m_stateEnum != HerbivoreState::Seeking && m_stateEnum != HerbivoreState::Eating)
 			ReleaseClaim();
@@ -162,10 +168,15 @@ namespace game
 		return m_ecology->NearestRaptor(Position(), range, &distance);
 	}
 
+	CarnivoreAI *HerbivoreAI::FindRex(float &distance) const
+	{
+		return m_ecology->NearestCarnivore(Position(), 30.0f, &distance);
+	}
+
 	bool HerbivoreAI::IsThreatened(ai::AIContext &)
 	{
 		float distance = 0.0f;
-		m_threatened = FindThreat(distance) != nullptr || m_panicTimer > 0.0f;
+		m_threatened = FindThreat(distance) != nullptr || FindRex(distance) != nullptr || m_panicTimer > 0.0f;
 		return m_threatened;
 	}
 
@@ -186,18 +197,26 @@ namespace game
 	ai::Node::State HerbivoreAI::React(ai::AIContext &)
 	{
 		auto &transform = gameObject->GetTransform();
-		float distance = 0.0f;
+		float distance = 0.0f, rexDistance = 0.0f;
 		DinosaurAI *raptor = FindThreat(distance);
+		CarnivoreAI *rex = FindRex(rexDistance);
 
-		if (Large() && raptor)
+		// A hurt animal that is still under attack runs instead of fighting. A T-Rex is too great a threat to
+		// face, unless it has a healthy triceratops cornered.
+		const bool hurtAndAttacked = m_hurtTimer > 0.0f && HealthFraction() < kFleeHealthFraction;
+		const bool fightRex = Large() && rex && rexDistance < 6.0f && !hurtAndAttacked;
+		const bool fightRaptor = Large() && raptor && !rex && !hurtAndAttacked;
+
+		if (fightRex || fightRaptor)
 		{
-			// Stand and fight: charge the raptor and gore it.
+			// Stand and fight: charge the attacker and gore it.
 			SetState(HerbivoreState::Defending);
-			glm::vec3 dir = Flat(raptor->gameObject->GetTransform().position - transform.position);
+			const glm::vec3 foe = fightRex ? rex->Position() : raptor->gameObject->GetTransform().position;
+			glm::vec3 dir = Flat(foe - transform.position);
 			const float len = glm::length(dir);
 			if (len > 1e-3f)
 				dir /= len;
-			if (len > 3.8f)
+			if (len > (fightRex ? 5.5f : 3.8f))
 			{
 				if (!StepToward(dir, m_speed))
 					m_body->velocity.x = m_body->velocity.z = 0.0f;
@@ -209,8 +228,11 @@ namespace game
 				if (m_goreTimer <= 0.0f)
 				{
 					m_goreTimer = 1.3f;
-					raptor->Hurt(18.0f);
-					gameObject->GetWorld().EmitBlood(raptor->gameObject->GetTransform().position + glm::vec3(0.0f, 0.5f, 0.0f), dir, 16);
+					if (fightRex)
+						rex->Hurt(18.0f, transform.position);
+					else
+						raptor->Hurt(18.0f, &transform.position);
+					gameObject->GetWorld().EmitBlood(foe + glm::vec3(0.0f, 0.5f, 0.0f), dir, 16);
 					if (auto *audio = gameObject->GetWorld().audio)
 						audio->PlayOneShot("triceratops_bellow", transform.position, 0.8f, 1.15f);
 				}
@@ -218,9 +240,9 @@ namespace game
 			return ai::Node::State::Running;
 		}
 
-		// Run: directly away from the raptor, or from the player after being shot. Swerve around blocked ground.
+		// Run: directly away from the predator, or from the player after being shot. Swerve around blocked ground.
 		SetState(HerbivoreState::Fleeing);
-		const glm::vec3 from = raptor ? raptor->gameObject->GetTransform().position : m_player.GetTransform().position;
+		const glm::vec3 from = rex ? rex->Position() : raptor ? raptor->gameObject->GetTransform().position : m_player.GetTransform().position;
 		glm::vec3 away = Flat(transform.position - from);
 		if (glm::length(away) < 1e-3f)
 			away = glm::vec3(1.0f, 0.0f, 0.0f);
@@ -237,6 +259,14 @@ namespace game
 		}
 		if (!moving)
 			m_body->velocity.x = m_body->velocity.z = 0.0f;
+		return ai::Node::State::Running;
+	}
+
+	// Lie down and heal; sleeping restores health until the wounds have mended.
+	ai::Node::State HerbivoreAI::Rest(ai::AIContext &)
+	{
+		m_body->velocity.x = m_body->velocity.z = 0.0f;
+		SetState(HerbivoreState::Sleeping);
 		return ai::Node::State::Running;
 	}
 
@@ -268,11 +298,26 @@ namespace game
 			return node;
 		};
 
-		// Threat: raptors nearby (or being shot) override everything else.
+		// Threat: raptors, a T-Rex nearby (or being shot) override everything else.
 		auto reactSequence = tree.AddNode<ai::Sequence>();
 		reactSequence->SetName("ReactSequence");
 		reactSequence->AddChild(condition("IsThreatened", [this](ai::AIContext &ctx) { return IsThreatened(ctx); }));
 		reactSequence->AddChild(action("React", [this](ai::AIContext &ctx) { return React(ctx); }));
+
+		auto restSequence = tree.AddNode<ai::Sequence>();
+		restSequence->SetName("RestSequence");
+		restSequence->AddChild(condition(
+			"NeedsRest",
+			[this](ai::AIContext &)
+			{
+				const bool wasResting = m_resting;
+				m_resting = wasResting ? HealthFraction() < kHealedFraction : (HealthFraction() < kRestHealthFraction && m_hurtTimer <= 0.0f);
+				if (wasResting && !m_resting)
+					SetState(HerbivoreState::Idle);
+				return m_resting;
+			}
+		));
+		restSequence->AddChild(action("Rest", [this](ai::AIContext &ctx) { return Rest(ctx); }));
 
 		// Forage: query for the best plant, walk to it, eat for a few seconds, then repeat until full.
 		auto query = tree.AddNode<ai::RunEnvQuery>();
@@ -299,7 +344,8 @@ namespace game
 				return grid.IsWalkable(to.x, to.y) && grid.Connected(from.x, from.y, to.x, to.y);
 			}
 		);
-		query->query.AddFilter([this](ai::AIContext &, const ai::EnvQueryItem &item) { return m_ecology->NearestRaptor(item.location, 14.0f) == nullptr; });
+		query->query.AddFilter([this](ai::AIContext &, const ai::EnvQueryItem &item)
+							   { return m_ecology->NearestRaptor(item.location, 14.0f) == nullptr && m_ecology->NearestCarnivore(item.location, 24.0f) == nullptr; });
 		query->query.AddScorer([this](ai::AIContext &, const ai::EnvQueryItem &item) { return 1.0f - glm::length(Flat(item.location - Position())) / kFoodSearchRadius; }, 1.0f);
 		query->query.AddScorer([](ai::AIContext &, const ai::EnvQueryItem &item) { return static_cast<Plant *>(item.data)->Fullness(); }, 0.5f);
 		query->query.AddScorer(
@@ -405,6 +451,7 @@ namespace game
 		wander->AddChild(restWait);
 
 		priority->AddChild(reactSequence);
+		priority->AddChild(restSequence);
 		priority->AddChild(forage);
 		priority->AddChild(wander);
 		root->SetChild(priority);
@@ -470,6 +517,7 @@ namespace game
 			speed = 0.9f;
 			break;
 		case HerbivoreState::Eating:
+		case HerbivoreState::Sleeping:
 			target = -1.0f;
 			break;
 		case HerbivoreState::Fleeing:

@@ -1,4 +1,5 @@
 #include "game/Ecology.h"
+#include "game/CarnivoreAI.h"
 #include "game/DinosaurAI.h"
 #include "game/HerbivoreAI.h"
 #include "game/Plant.h"
@@ -37,6 +38,20 @@ namespace game
 		return count;
 	}
 
+	int Ecology::CountRaptorsNear(const glm::vec3 &position, float range, float minFraction) const
+	{
+		int count = 0;
+		for (const DinosaurAI *r : raptors)
+		{
+			if (r->Dead() || r->HealthFraction() < minFraction)
+				continue;
+			const glm::vec3 d = r->Position() - position;
+			if (glm::length(glm::vec2(d.x, d.z)) <= range)
+				++count;
+		}
+		return count;
+	}
+
 	DinosaurAI *Ecology::NearestRaptor(const glm::vec3 &position, float range, float *distance) const
 	{
 		DinosaurAI *best = nullptr;
@@ -56,6 +71,41 @@ namespace game
 		if (best && distance)
 			*distance = bestDist;
 		return best;
+	}
+
+	CarnivoreAI *Ecology::NearestCarnivore(const glm::vec3 &position, float range, float *distance) const
+	{
+		CarnivoreAI *best = nullptr;
+		float bestDist = range;
+		for (CarnivoreAI *c : carnivores)
+		{
+			if (c->Dead())
+				continue;
+			const glm::vec3 d = c->Position() - position;
+			const float dist = glm::length(glm::vec2(d.x, d.z));
+			if (dist <= bestDist)
+			{
+				bestDist = dist;
+				best = c;
+			}
+		}
+		if (best && distance)
+			*distance = bestDist;
+		return best;
+	}
+
+	int Ecology::CountLargeHerbivores(const glm::vec3 &position, float range) const
+	{
+		int count = 0;
+		for (const HerbivoreAI *h : herbivores)
+		{
+			if (h->Dead() || !h->Large())
+				continue;
+			const glm::vec3 d = h->Position() - position;
+			if (glm::length(glm::vec2(d.x, d.z)) <= range)
+				++count;
+		}
+		return count;
 	}
 
 } // namespace game

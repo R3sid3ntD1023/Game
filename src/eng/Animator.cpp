@@ -31,12 +31,27 @@ namespace eng
         return false;
     }
 
+    const gfx::AnimationClip *Animator::FindClip(const std::string &name) const
+    {
+        if (!m_clips)
+            return nullptr;
+        for (const auto &c : *m_clips)
+            if (c.name == name)
+                return &c;
+        return nullptr;
+    }
+
     void Animator::OnUpdate(float dt)
     {
         m_time += dt * speed;
         m_skeleton->LocalBindPose(m_locals);
 
-        if (m_clip && m_clip->duration > 0.0f)
+        if (graph)
+        {
+            graph->Update(dt * speed, graphParams);
+            graph->Evaluate(*m_skeleton, m_locals);
+        }
+        else if (m_clip && m_clip->duration > 0.0f)
         {
             const float t = m_loop ? std::fmod(m_time, m_clip->duration) : std::min(m_time, m_clip->duration);
             m_clip->Sample(t, m_locals);

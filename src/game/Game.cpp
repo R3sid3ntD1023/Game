@@ -9,6 +9,7 @@
 #include "eng/Scene.h"
 #include "eng/SceneLoader.h"
 #include "eng/Script.h"
+#include "game/CarnivoreAI.h"
 #include "game/DinosaurAI.h"
 #include "game/EscapeZone.h"
 #include "game/FirstPersonController.h"
@@ -217,7 +218,26 @@ namespace game
 				}
 				else
 					go.AddComponent<eng::Animator>(RaptorSkeleton()).hook = RaptorPose;
-				go.AddComponent<eng::ScriptComponent>().Add<DinosaurAI>(*player, m_state, Param(p, 0, 8.0f), Param(p, 1, 12.0f));
+				go.AddComponent<eng::ScriptComponent>().Add<DinosaurAI>(*player, m_state, Param(p, 0, 8.0f), Param(p, 1, 12.0f), Param(p, 2, 0.0f) > 0.5f);
+			}
+		);
+
+		loader.RegisterScript(
+			kScriptCarnivore,
+			[this, raptorModel, raptorSkeleton, raptorClips](eng::GameObject &go, const std::vector<float> &p)
+			{
+				eng::GameObject *player = m_world->Find("Player");
+				if (!player)
+					throw std::runtime_error("T-Rex needs a Player object");
+				if (raptorModel)
+				{
+					auto &animator = go.AddComponent<eng::Animator>(raptorSkeleton, raptorClips);
+					if (!raptorModel->clips.empty())
+						animator.Play(raptorModel->clips.front().name);
+				}
+				else
+					go.AddComponent<eng::Animator>(RaptorSkeleton()).hook = RaptorPose;
+				go.AddComponent<eng::ScriptComponent>().Add<CarnivoreAI>(*player, m_state, Param(p, 0, 7.5f), Param(p, 1, 35.0f));
 			}
 		);
 

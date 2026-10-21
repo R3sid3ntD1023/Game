@@ -8,7 +8,8 @@ namespace game
 
 	// Script names and mesh kinds used by generated scenes; registered in Game.
 	inline constexpr const char *kScriptPlayer = "FirstPersonController";
-	inline constexpr const char *kScriptDinosaur = "DinosaurAI";
+	inline constexpr const char *kScriptDinosaur = "DinosaurAI"; // params: speed, bite damage, roams with a pack (1) or solo (0)
+	inline constexpr const char *kScriptCarnivore = "CarnivoreAI"; // params: speed, bite damage (the T-Rex)
 	inline constexpr const char *kScriptHerbivore = "HerbivoreAI"; // params: species (0 triceratops, 1 protoceratops), speed
 	inline constexpr const char *kScriptPlant = "Plant";		   // params: bites, regrow seconds
 	inline constexpr const char *kScriptEscape = "EscapeZone";
@@ -37,6 +38,8 @@ namespace game
 		int grassClumps = 400; // each clump scatters several tufts
 		int rocks = 20;
 		int raptors = 10;
+		bool raptorPacks = true; // raptors roam together; false sends each off on its own
+		int trex = 1;
 		int triceratops = 3;
 		int protoceratops = 5;
 		int buildings = 10;

@@ -7,6 +7,7 @@ namespace game
 {
 
 	class DinosaurAI;
+	class CarnivoreAI;
 	class HerbivoreAI;
 	class Plant;
 
@@ -29,6 +30,7 @@ namespace game
 		std::vector<Plant *> plants;
 		std::vector<HerbivoreAI *> herbivores;
 		std::vector<DinosaurAI *> raptors;
+		std::vector<CarnivoreAI *> carnivores; // the large solitary predators (T-Rex)
 
 		void Update(float dt);
 
@@ -39,9 +41,15 @@ namespace game
 		const std::vector<PackCall> &Calls() const { return m_calls; }
 		// How many living raptors are currently committed to this prey.
 		int PackSize(uint32_t preyId) const;
+		// Living raptors within `range` of `position` whose health is at least `minFraction`.
+		int CountRaptorsNear(const glm::vec3 &position, float range, float minFraction) const;
 
 		// Living raptor closest to `position` within `range`, or null.
 		DinosaurAI *NearestRaptor(const glm::vec3 &position, float range, float *distance = nullptr) const;
+		// Living large carnivore closest to `position` within `range`, or null.
+		CarnivoreAI *NearestCarnivore(const glm::vec3 &position, float range, float *distance = nullptr) const;
+		// Living large herbivores within `range` (they gang up on a predator).
+		int CountLargeHerbivores(const glm::vec3 &position, float range) const;
 
 		template <class T>
 		static void Remove(std::vector<T *> &list, const T *item)

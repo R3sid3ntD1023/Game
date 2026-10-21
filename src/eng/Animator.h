@@ -1,4 +1,5 @@
 #pragma once
+#include "eng/AnimStateMachine.h"
 #include "eng/Component.h"
 #include "gfx/Skeleton.h"
 #include <functional>
@@ -22,6 +23,11 @@ public:
     void OnUpdate(float dt) override;
 
     bool Play(const std::string& clip, bool loop = true);
+
+    // Optional animation graph; when set it replaces the single clip as the base pose.
+    std::shared_ptr<AnimNode> graph;
+    AnimParams graphParams; // parameters fed to the graph (a state machine also reads its own via Update(dt))
+    const gfx::AnimationClip* FindClip(const std::string& name) const;
 
     PoseHook hook;
     float speed = 1.0f; // playback / time scale

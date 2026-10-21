@@ -446,7 +446,7 @@ namespace game
 			medkit(randomLandPoint(1.0f, 20.0f), i % 2);
 		}
 
-		// Raptor script params = speed, bite damage.
+		// Raptor script params = speed, bite damage, roams with a pack.
 		for (int i = 0; i < params.raptors; ++i)
 		{
 			const glm::vec2 p = randomLandPoint(1.0f, 60.0f);
@@ -455,7 +455,20 @@ namespace game
 			d.halfExtents = {1.1f, 0.75f, 0.45f};
 			d.health = 80.0f;
 			d.script = kScriptDinosaur;
-			d.scriptParams = {8.0f, 12.0f};
+			d.scriptParams = {8.0f, 12.0f, params.raptorPacks ? 1.0f : 0.0f};
+		}
+
+		// T-Rex script params = speed, bite damage. Built from the raptor mesh at 2.4x scale.
+		const int trexMat = s.AddMaterial({"trex_hide", {0.2f, 0.17f, 0.1f}, 0.0f, 0.65f, {}});
+		for (int i = 0; i < params.trex; ++i)
+		{
+			const glm::vec2 p = randomLandPoint(1.0f, 80.0f);
+			auto &d = add("TRex", {p.x, heightSource.Height(p.x, p.y) + 2.7f, p.y}, glm::vec3(2.4f), raptor, trexMat);
+			d.hasBody = true;
+			d.halfExtents = {2.6f, 1.8f, 1.1f};
+			d.health = 5000.0f;
+			d.script = kScriptCarnivore;
+			d.scriptParams = {7.5f, 35.0f};
 		}
 
 		// Herbivore script params = species, speed.
@@ -488,6 +501,7 @@ namespace game
 		p.grassClumps = 60;
 		p.rocks = 4;
 		p.raptors = 2;
+		p.trex = 1;
 		p.triceratops = 1;
 		p.protoceratops = 2;
 		p.buildings = 2;

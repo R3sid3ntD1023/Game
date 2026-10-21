@@ -1,6 +1,8 @@
-#include "game/DinosaurAI.h"
+﻿#include "game/DinosaurAI.h"
 #include "ai/Nodes.h"
+#include "game/CarnivoreAI.h"
 #include "game/HerbivoreAI.h"
+#include "game/Survival.h"
 #include "eng/World.h"
 #include <algorithm>
 #include <cmath>
@@ -18,11 +20,12 @@ namespace game
 			Ecology::Remove(m_ecology->raptors, this);
 	}
 
-	void DinosaurAI::Hurt(float amount)
+	void DinosaurAI::Hurt(float amount, const glm::vec3 *from)
 	{
 		if (Dead())
 			return;
 		m_animalDamage = true;
+		m_pendingAttacker = from ? *from : gameObject->GetTransform().position;
 		m_health->Damage(amount);
 		m_animalDamage = false;
 	}
@@ -50,17 +53,25 @@ namespace game
 					gameObject->Destroy();
 					spdlog::info("Dinosaur down ({} kills)", m_state.kills);
 				}
-				else if (!m_animalDamage)
+				m_hurtTimer = kRecentlyHurtSeconds;
+				if (m_animalDamage)
 				{
-					m_perception.OnDamaged(amount, m_target.GetTransform().position);
+					m_attackerPos = m_pendingAttacker;
+				}
+				else
+				{
+					m_attackerPos = m_target.GetTransform().position;
+					m_perception.OnDamaged(amount, m_attackerPos);
 				}
 			}
 		);
 
 		InitializeBehaviorTree();
+		BuildAnimationGraph();
 
 		m_awakeSenses = m_perception.config;
 		m_awakeTimer = static_cast<float>(std::rand() % 4000) / 100.0f;
+		m_boldness = static_cast<float>(std::rand() % 1001) / 1000.0f;
 		m_awakeLimit = 50.0f + static_cast<float>(std::rand() % 6000) / 100.0f;
 		if (std::rand() % 3 == 0)
 			StartSleep();
@@ -73,10 +84,13 @@ namespace game
 
 		m_attackTimer = std::max(0.0f, m_attackTimer - dt);
 		m_preyBiteTimer = std::max(0.0f, m_preyBiteTimer - dt);
+		m_hurtTimer = std::max(0.0f, m_hurtTimer - dt);
 
 		m_perception.Update(dt, *gameObject, m_target);
 		if (gameObject->GetWorld().debugPerception)
 			m_perception.DrawDebug(*gameObject, m_target.GetTransform().position);
+		UpdateFlee(dt);
+		UpdateGroup();
 		UpdateRest(dt);
 		UpdatePrey(dt);
 
@@ -106,6 +120,70 @@ namespace game
 		m_perception.config = m_awakeSenses;
 	}
 
+	// Pack roamers within range of each other follow whichever of them registered first; everyone else roams solo.
+	void DinosaurAI::UpdateGroup()
+	{
+		m_leader = nullptr;
+		if (!m_packRoaming)
+			return;
+		const glm::vec3 pos = Position();
+		for (DinosaurAI *r : m_ecology->raptors)
+		{
+			if (r == this)
+				return; // we are first in line: lead
+			if (!r->m_packRoaming || r->Dead() || r->m_sleeping)
+				continue;
+			const glm::vec3 d = r->Position() - pos;
+			if (glm::length(glm::vec2(d.x, d.z)) < 70.0f)
+			{
+				m_leader = r;
+				return;
+			}
+		}
+	}
+
+	// Decides whether to run: attacked while hurt, a T-Rex close by (too great a threat), or badly wounded and hunted.
+	void DinosaurAI::UpdateFlee(float dt)
+	{
+		const glm::vec3 pos = gameObject->GetTransform().position;
+		const float fraction = HealthFraction();
+		CarnivoreAI *rex = m_ecology->NearestCarnivore(pos, 30.0f);
+
+		const bool hurtAndAttacked = m_hurtTimer > 0.0f && fraction < kFleeHealthFraction;
+		const bool woundedAndHunted = fraction < kFleeHealthFraction * 0.6f && m_perception.Alerted();
+
+		// A T-Rex is too great a threat alone, but a healthy pack of kRexPackSize raptors takes it on together.
+		const bool healthy = fraction >= kFleeHealthFraction;
+		const bool packAttack = rex && healthy && m_ecology->CountRaptorsNear(pos, 30.0f, kFleeHealthFraction) >= kRexPackSize;
+		const bool tooGreat = rex && !packAttack;
+		m_rex = packAttack ? rex : nullptr;
+
+		if (tooGreat || hurtAndAttacked || woundedAndHunted)
+		{
+			m_fleeTimer = 4.0f;
+			m_fleeFrom = rex ? rex->Position() : (m_hurtTimer > 0.0f ? m_attackerPos : m_perception.LastKnownPosition());
+		}
+		else if (packAttack)
+			m_fleeTimer = 0.0f;
+		else
+			m_fleeTimer = std::max(0.0f, m_fleeTimer - dt);
+
+		const bool fleeing = m_fleeTimer > 0.0f;
+		if (fleeing && !m_fleeing)
+		{
+			if (m_sleeping)
+				WakeUp();
+			AbandonPrey(30.0f);
+		}
+		m_fleeing = fleeing;
+		if (m_rex && !m_fleeing)
+		{
+			if (m_sleeping)
+				WakeUp();
+			AbandonPrey(30.0f);
+		}
+	}
+
 	// Drives the sleep and hunt timers that the behaviour tree conditions read.
 	void DinosaurAI::UpdateRest(float dt)
 	{
@@ -115,14 +193,18 @@ namespace game
 
 		if (m_sleeping)
 		{
+			// Sleeping heals; it ends once the timer is up and the wounds have mended.
+			m_health->Heal(m_health->max * kSleepHealPerSecond * dt);
 			m_sleepTimer -= dt;
-			if (alerted || m_sleepTimer <= 0.0f)
+			const bool healed = m_health->current >= m_health->max * kHealedFraction;
+			if (alerted || (m_sleepTimer <= 0.0f && healed))
 				WakeUp();
 		}
-		else if (!alerted && m_huntTimer <= 0.0f && (m_stateEnum == DinosaurState::Wandering || m_stateEnum == DinosaurState::Idle))
+		else if (!alerted && !m_fleeing && m_hurtTimer <= 0.0f && m_huntTimer <= 0.0f && (m_stateEnum == DinosaurState::Wandering || m_stateEnum == DinosaurState::Idle))
 		{
 			m_awakeTimer += dt;
-			if (m_awakeTimer > m_awakeLimit)
+			const bool wounded = m_health->current < m_health->max * kRestHealthFraction;
+			if (m_awakeTimer > m_awakeLimit || wounded)
 				StartSleep();
 		}
 
@@ -167,17 +249,33 @@ namespace game
 	{
 		m_preyId = 0;
 		m_preyCalled = false;
+		m_preySolo = false;
 		m_preyTime = 0.0f;
 		m_preyCooldown = cooldown;
 		m_aiContext.blackboard.Clear("preyTarget");
 	}
 
-	// Picks out large prey, hears other raptors' calls, and gives up on hunts that have no pack or drag on.
+	// Whether a lone raptor is willing to risk attacking this herbivore: small ones are an easy meal for a healthy raptor,
+	// large ones only for a bold, healthy raptor with no T-Rex or herd about.
+	bool DinosaurAI::WillRiskSolo(const HerbivoreAI &prey) const
+	{
+		const glm::vec3 pos = Position();
+		const float health = HealthFraction();
+		if (health < 0.5f || m_ecology->NearestCarnivore(pos, 40.0f))
+			return false;
+		if (!prey.Large())
+			return true;
+		return health >= 0.8f && m_boldness > 0.65f && m_ecology->CountLargeHerbivores(prey.Position(), 20.0f) < 2;
+	}
+
+	// Hunts any herbivore it can eat. A pack calls its members in and attacks together; a lone raptor weighs the risk
+	// first. Also hears other raptors' calls, and gives up on hunts that drag on or lose their pack.
 	void DinosaurAI::UpdatePrey(float dt)
 	{
 		m_preyCooldown = std::max(0.0f, m_preyCooldown - dt);
 		m_preyScanTimer -= dt;
 		const glm::vec3 pos = gameObject->GetTransform().position;
+		const bool fit = !m_fleeing && HealthFraction() >= kFleeHealthFraction && !m_ecology->NearestCarnivore(pos, 40.0f);
 
 		uint32_t newestCall = m_lastCallId;
 		for (const PackCall &call : m_ecology->Calls())
@@ -185,7 +283,7 @@ namespace game
 			if (call.id <= m_lastCallId)
 				continue;
 			newestCall = std::max(newestCall, call.id);
-			if (call.caller == this || m_preyId || m_preyCooldown > 0.0f || m_perception.Alerted() || glm::distance(pos, call.position) > call.radius)
+			if (!fit || call.caller == this || m_preyId || m_preyCooldown > 0.0f || m_perception.Alerted() || glm::distance(pos, call.position) > call.radius)
 				continue;
 			HerbivoreAI *prey = m_ecology->FindHerbivore(call.preyId);
 			if (!prey || prey->Dead())
@@ -194,6 +292,7 @@ namespace game
 				WakeUp();
 			m_preyId = call.preyId;
 			m_preyCalled = true; // the caller already summoned the pack
+			m_preySolo = false;
 			m_preyTime = 0.0f;
 		}
 		m_lastCallId = newestCall;
@@ -205,21 +304,23 @@ namespace game
 				AbandonPrey(10.0f); // it died (maybe at our teeth); take a breather
 			else if (m_preyTime > 60.0f)
 				AbandonPrey(40.0f);
-			else if (m_preyCalled && m_preyTime > 4.0f && m_ecology->PackSize(m_preyId) < 2)
+			else if (m_preySolo && !WillRiskSolo(*CurrentPrey()))
+				AbandonPrey(30.0f); // the odds turned against a lone hunter
+			else if (!m_preySolo && m_preyCalled && m_preyTime > 4.0f && m_ecology->PackSize(m_preyId) < 2)
 				AbandonPrey(45.0f); // no pack, no hunt
 			return;
 		}
 
-		if (m_sleeping || m_perception.Alerted() || m_preyCooldown > 0.0f || m_preyScanTimer > 0.0f)
+		if (!fit || m_sleeping || m_perception.Alerted() || m_preyCooldown > 0.0f || m_preyScanTimer > 0.0f)
 			return;
 		m_preyScanTimer = 0.6f + static_cast<float>(std::rand() % 40) / 100.0f;
 
-		// Only large herbivores are worth a pack's effort.
+		// Nearest herbivore of any size.
 		HerbivoreAI *best = nullptr;
 		float bestDist = 45.0f;
 		for (HerbivoreAI *h : m_ecology->herbivores)
 		{
-			if (!h->Large() || h->Dead())
+			if (h->Dead())
 				continue;
 			const float d = PreyDistance(*h);
 			if (d < bestDist)
@@ -228,12 +329,26 @@ namespace game
 				best = h;
 			}
 		}
-		if (best)
+		if (!best)
+			return;
+
+		const bool inPack = m_packRoaming && m_ecology->CountRaptorsNear(pos, 40.0f, kFleeHealthFraction) >= 2;
+		if (inPack)
 		{
 			m_preyId = best->Id();
 			m_preyCalled = false;
+			m_preySolo = false;
 			m_preyTime = 0.0f;
 		}
+		else if (WillRiskSolo(*best))
+		{
+			m_preyId = best->Id();
+			m_preyCalled = true; // nobody to call
+			m_preySolo = true;
+			m_preyTime = 0.0f;
+		}
+		else
+			m_preyCooldown = 10.0f; // decided not to risk it
 	}
 
 	void DinosaurAI::OnFixedUpdate(float dt)
@@ -249,6 +364,164 @@ namespace game
 		m_aiContext.blackboard.Add<glm::vec3>("chaseTarget");
 		m_aiContext.blackboard.Add<glm::vec3>("huntTarget");
 		m_aiContext.blackboard.Add<glm::vec3>("preyTarget");
+		m_aiContext.blackboard.Add<glm::vec3>("fleeTarget");
+		m_aiContext.blackboard.Add<glm::vec3>("rexTarget");
+
+		auto fleeTo = m_behaviorTree.AddNode<ai::MoveTo>();
+		fleeTo->SetName("FleeTo");
+		fleeTo->m_target = "fleeTarget";
+		fleeTo->m_speed = m_speed * 1.1f;
+
+		auto fleeCondition = m_behaviorTree.AddNode<ai::Conditional>();
+		fleeCondition->SetName("IsFleeing");
+		fleeCondition->SetCondition([this](ai::AIContext &) { return m_fleeing; });
+
+		auto fleeAction = m_behaviorTree.AddNode<ai::Action>();
+		fleeAction->SetName("Flee");
+		fleeAction->SetAction(
+			[this, fleeTo](ai::AIContext &ctx)
+			{
+				m_fleeRepick -= ctx.deltaTime;
+				if (m_branch != Branch::Flee || !ctx.blackboard.IsSet("fleeTarget") || m_fleeRepick <= 0.0f)
+				{
+					m_branch = Branch::Flee;
+					m_fleeRepick = 1.5f;
+					ctx.blackboard.Set<glm::vec3>("fleeTarget", PickFleePoint(*gameObject, m_fleeFrom, 30.0f));
+					fleeTo->Restart();
+				}
+				SetState(DinosaurState::Fleeing);
+				return ai::Node::State::Success;
+			}
+		);
+
+		auto fleeSequence = m_behaviorTree.AddNode<ai::Sequence>();
+		fleeSequence->SetName("FleeSequence");
+		fleeSequence->AddChild(fleeCondition);
+		fleeSequence->AddChild(fleeAction);
+		fleeSequence->AddChild(fleeTo);
+
+		// Pack attack on a T-Rex: close in and bite while enough healthy raptors are together.
+		auto rexBite = m_behaviorTree.AddNode<ai::Sequence>();
+		rexBite->SetName("RexBiteSequence");
+		{
+			auto inReach = m_behaviorTree.AddNode<ai::Conditional>();
+			inReach->SetName("RexInReach");
+			inReach->SetCondition(
+				[this](ai::AIContext &)
+				{
+					if (!m_rex)
+						return false;
+					glm::vec3 d = m_rex->Position() - Position();
+					d.y = 0.0f;
+					return glm::length(d) <= 4.2f;
+				}
+			);
+			auto bite = m_behaviorTree.AddNode<ai::Action>();
+			bite->SetName("RexBite");
+			bite->SetAction(
+				[this](ai::AIContext &ctx)
+				{
+					if (!m_rex)
+						return ai::Node::State::Failure;
+					SetState(DinosaurState::Attacking);
+					m_branch = Branch::Rex;
+					m_body->velocity.x = m_body->velocity.z = 0.0f;
+					auto &self = ctx.self->GetTransform();
+					glm::vec3 dir = m_rex->Position() - self.position;
+					dir.y = 0.0f;
+					if (glm::length(dir) > 1e-3f)
+					{
+						dir = glm::normalize(dir);
+						self.rotation = glm::angleAxis(std::atan2(-dir.z, dir.x), glm::vec3(0, 1, 0));
+					}
+					if (m_preyBiteTimer <= 0.0f)
+					{
+						m_preyBiteTimer = 0.9f;
+						gameObject->GetWorld().EmitBlood(m_rex->Position() + glm::vec3(0.0f, 1.0f, 0.0f), -dir, 12);
+						m_rex->Hurt(m_damage, self.position);
+					}
+					return ai::Node::State::Running;
+				}
+			);
+			rexBite->AddChild(inReach);
+			rexBite->AddChild(bite);
+		}
+
+		auto rexTo = m_behaviorTree.AddNode<ai::MoveTo>();
+		rexTo->SetName("RexTo");
+		rexTo->m_target = "rexTarget";
+		rexTo->m_speed = m_speed;
+		auto rexApproach = m_behaviorTree.AddNode<ai::Sequence>();
+		rexApproach->SetName("RexApproachSequence");
+		{
+			auto has = m_behaviorTree.AddNode<ai::Conditional>();
+			has->SetName("HasRex");
+			has->SetCondition([this](ai::AIContext &) { return m_rex != nullptr; });
+			auto track = m_behaviorTree.AddNode<ai::Action>();
+			track->SetName("TrackRex");
+			track->SetAction(
+				[this, rexTo](ai::AIContext &ctx)
+				{
+					if (!m_rex)
+						return ai::Node::State::Failure;
+					if (m_branch != Branch::Rex)
+					{
+						m_branch = Branch::Rex;
+						rexTo->Restart();
+					}
+					ctx.blackboard.Set<glm::vec3>("rexTarget", m_rex->Position());
+					SetState(DinosaurState::Chasing);
+					return ai::Node::State::Success;
+				}
+			);
+			rexApproach->AddChild(has);
+			rexApproach->AddChild(track);
+			rexApproach->AddChild(rexTo);
+		}
+
+		// Pack roaming: stay near the leader while wandering, standing by once close enough.
+		m_aiContext.blackboard.Add<glm::vec3>("followTarget");
+		auto followTo = m_behaviorTree.AddNode<ai::MoveTo>();
+		followTo->SetName("FollowTo");
+		followTo->m_target = "followTarget";
+		followTo->m_speed = m_speed * 0.4f;
+		auto followSequence = m_behaviorTree.AddNode<ai::Sequence>();
+		followSequence->SetName("FollowSequence");
+		{
+			auto has = m_behaviorTree.AddNode<ai::Conditional>();
+			has->SetName("HasLeader");
+			has->SetCondition([this](ai::AIContext &) { return m_leader != nullptr; });
+			auto follow = m_behaviorTree.AddNode<ai::Action>();
+			follow->SetName("Follow");
+			follow->SetAction(
+				[this, followTo](ai::AIContext &ctx)
+				{
+					if (!m_leader)
+						return ai::Node::State::Failure;
+					glm::vec3 toLeader = m_leader->Position() - Position();
+					toLeader.y = 0.0f;
+					if (glm::length(toLeader) < 9.0f)
+					{
+						// Close enough: stand with the pack.
+						m_branch = Branch::Follow;
+						m_body->velocity.x = m_body->velocity.z = 0.0f;
+						SetState(DinosaurState::Idle);
+						return ai::Node::State::Running;
+					}
+					if (m_branch != Branch::Follow)
+					{
+						m_branch = Branch::Follow;
+						followTo->Restart();
+					}
+					ctx.blackboard.Set<glm::vec3>("followTarget", m_leader->Position());
+					SetState(DinosaurState::Wandering);
+					return ai::Node::State::Success;
+				}
+			);
+			followSequence->AddChild(has);
+			followSequence->AddChild(follow);
+			followSequence->AddChild(followTo);
+		}
 
 		auto chaseTo = m_behaviorTree.AddNode<ai::MoveTo>();
 		auto wanderTo = m_behaviorTree.AddNode<ai::MoveTo>();
@@ -606,6 +879,9 @@ namespace game
 		preySequence->AddChild(trackPrey);
 		preySequence->AddChild(preyTo);
 
+		prioritySelector->AddChild(fleeSequence);
+		prioritySelector->AddChild(rexBite);
+		prioritySelector->AddChild(rexApproach);
 		prioritySelector->AddChild(attackSequence);
 		prioritySelector->AddChild(chaseSequence);
 		prioritySelector->AddChild(sleepSequence);
@@ -613,6 +889,7 @@ namespace game
 		prioritySelector->AddChild(preyBiteSequence);
 		prioritySelector->AddChild(callSequence);
 		prioritySelector->AddChild(preySequence);
+		prioritySelector->AddChild(followSequence);
 		prioritySelector->AddChild(findPointSelector);
 		root->SetChild(prioritySelector);
 
@@ -626,17 +903,17 @@ namespace game
 		if (!audio)
 			return;
 
-		if (m_stateEnum != DinosaurState::Wandering && m_stateEnum != DinosaurState::Chasing && m_stateEnum != DinosaurState::Hunting && m_stateEnum != DinosaurState::Stalking)
+		if (m_stateEnum != DinosaurState::Wandering && m_stateEnum != DinosaurState::Chasing && m_stateEnum != DinosaurState::Hunting && m_stateEnum != DinosaurState::Stalking && m_stateEnum != DinosaurState::Fleeing)
 			return;
 
-		const float speed = m_stateEnum == DinosaurState::Chasing ? m_speed : m_stateEnum == DinosaurState::Stalking ? m_speed * 0.9f : m_stateEnum == DinosaurState::Hunting ? m_speed * 0.55f : m_speed * 0.3f;
+		const float speed = (m_stateEnum == DinosaurState::Chasing || m_stateEnum == DinosaurState::Fleeing) ? m_speed : m_stateEnum == DinosaurState::Stalking ? m_speed * 0.9f : m_stateEnum == DinosaurState::Hunting ? m_speed * 0.55f : m_speed * 0.3f;
 
 		if (!m_body->grounded)
 			return;
 
 		m_stepDistance += speed * dt;
 
-		float distancePerStep = m_stateEnum == DinosaurState::Chasing ? 1.8f : m_stateEnum == DinosaurState::Hunting ? 2.2f : 2.8f;
+		float distancePerStep = (m_stateEnum == DinosaurState::Chasing || m_stateEnum == DinosaurState::Fleeing) ? 1.8f : m_stateEnum == DinosaurState::Hunting ? 2.2f : 2.8f;
 		if (m_stepDistance >= distancePerStep)
 		{
 			m_stepDistance = 0.0f;
@@ -644,30 +921,72 @@ namespace game
 		}
 	}
 
-	void DinosaurAI::UpdateAnimation(float dt)
+	void DinosaurAI::BuildAnimationGraph()
+	{
+		// Only the procedural raptor is graph-driven; a rigged model keeps its own clip.
+		if (!m_animator || !m_animator->hook)
+			return;
+
+		const auto pose = m_animator->hook;
+		m_animator->hook = nullptr;
+
+		// 0 idle .. 1 run, driven by the "move" parameter.
+		auto locomotion = [&pose]()
+		{
+			auto node = std::make_unique<eng::BlendNode1D>("move");
+			node->Add(0.0f, std::make_unique<eng::ProceduralNode>(pose, 0.0f));
+			node->Add(1.0f, std::make_unique<eng::ProceduralNode>(pose, 1.0f));
+			return node;
+		};
+
+		auto machine = std::make_shared<eng::AnimStateMachine>();
+		for (auto state : {DinosaurState::Idle, DinosaurState::Wandering, DinosaurState::Hunting, DinosaurState::Chasing,
+						   DinosaurState::Attacking, DinosaurState::Calling, DinosaurState::Stalking, DinosaurState::Fleeing,
+						   DinosaurState::Dead})
+			machine->AddState(state, locomotion());
+		machine->AddState(DinosaurState::Sleeping, std::make_unique<eng::ProceduralNode>(pose, -1.0f));
+
+		// Lying down is slow; getting up is quick so a woken dinosaur is not a sitting duck.
+		for (auto state : {DinosaurState::Idle, DinosaurState::Wandering, DinosaurState::Hunting, DinosaurState::Sleeping,
+						   DinosaurState::Chasing, DinosaurState::Attacking, DinosaurState::Calling, DinosaurState::Stalking,
+						   DinosaurState::Fleeing, DinosaurState::Dead})
+		{
+			machine->AddAnyTransition(
+				state, [state](const eng::AnimParams &p) { return p.GetInt("state") == static_cast<int>(state); },
+				state == DinosaurState::Sleeping ? 0.8f : 0.25f);
+		}
+
+		machine->SetState(m_stateEnum);
+		m_animGraph = machine;
+		m_animator->graph = machine;
+	}
+
+	void DinosaurAI::UpdateAnimation(float)
 	{
 		if (!m_animator)
 			return;
 
-		// The pose hook reads blend as 0 idle .. 1 run, and 0 .. -1 for lying asleep; it eases between them.
-		float target = 0.0f, speed = 1.0f;
+		float move = 0.0f, speed = 1.0f;
 		switch (m_stateEnum)
 		{
 		case DinosaurState::Wandering:
-			target = 0.3f;
+			move = 0.3f;
 			speed = 0.8f;
 			break;
 		case DinosaurState::Hunting:
-			target = 0.6f;
+			move = 0.6f;
 			speed = 1.2f;
 			break;
 		case DinosaurState::Sleeping:
-			target = -1.0f;
 			speed = 0.6f;
 			break;
 		case DinosaurState::Chasing:
-			target = 1.0f;
+			move = 1.0f;
 			speed = 2.0f;
+			break;
+		case DinosaurState::Fleeing:
+			move = 1.0f;
+			speed = 2.2f;
 			break;
 		case DinosaurState::Attacking:
 			speed = 1.5f;
@@ -676,7 +995,7 @@ namespace game
 			speed = 1.2f;
 			break;
 		case DinosaurState::Stalking:
-			target = 0.9f;
+			move = 0.9f;
 			speed = 1.8f;
 			break;
 		case DinosaurState::Dead:
@@ -685,11 +1004,8 @@ namespace game
 		default:
 			break;
 		}
-		// Lying down is slow; getting up is quick so a woken dinosaur is not a sitting duck.
-		const float rate = (target < m_poseBlend && target < 0.0f) ? 1.2f : 4.0f;
-		const float step = rate * dt;
-		m_poseBlend += glm::clamp(target - m_poseBlend, -step, step);
-		m_animator->blend = m_poseBlend;
+		m_animator->graphParams.SetInt("state", static_cast<int>(m_stateEnum));
+		m_animator->graphParams.Set("move", move);
 		m_animator->speed = speed;
 	}
 

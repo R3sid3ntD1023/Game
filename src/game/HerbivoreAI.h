@@ -15,6 +15,8 @@
 
 namespace game
 {
+	class DinosaurAI;
+	class CarnivoreAI;
 
 	enum class HerbivoreState
 	{
@@ -24,12 +26,15 @@ namespace game
 		Eating,
 		Fleeing,
 		Defending, // a triceratops charging and goring a raptor
+		Sleeping,  // lying down to heal
 		Dead
 	};
 
 	// Brain of a plant eater. It gets hungry over time, asks an environment query for the best plant (near, full,
 	// unclaimed, away from raptors), walks there, and eats. Raptors nearby override that: the small protoceratops runs,
-	// the large triceratops charges them. Otherwise it wanders and rests.
+	// the large triceratops charges them - unless it is hurt and under attack, in which case it runs too. A T-Rex is
+	// too great a threat to fight: everything runs, except a triceratops it has cornered. When calm and wounded it
+	// lies down, and sleeping heals it.
 	class HerbivoreAI : public eng::Script
 	{
 	public:
@@ -59,9 +64,12 @@ namespace game
 		void DrawDebug() const;
 
 		DinosaurAI *FindThreat(float &distance) const;
+		CarnivoreAI *FindRex(float &distance) const;
 		bool IsThreatened(ai::AIContext &ctx);
 		ai::Node::State React(ai::AIContext &ctx);
+		ai::Node::State Rest(ai::AIContext &ctx);
 		bool StepToward(const glm::vec3 &dir, float speed);
+		float HealthFraction() const { return m_health->max > 0.0f ? m_health->current / m_health->max : 0.0f; }
 
 	private:
 		HerbivoreSpecies m_species;
@@ -78,6 +86,8 @@ namespace game
 
 		float m_hunger;
 		float m_panicTimer = 0.0f; // after being shot: run from the player
+		float m_hurtTimer = 0.0f;  // after being hit by anything: "currently attacked"
+		bool m_resting = false;
 		bool m_threatened = false;
 		float m_goreTimer = 0.0f;
 		float m_stepDistance = 0.0f;
