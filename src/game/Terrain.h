@@ -28,8 +28,8 @@ namespace game
 	{
 		static constexpr float kHalfSize = 350.0f;
 		static constexpr float kIslandRadius = 400.0f;
-		static constexpr float kWalkRadius = 200.0f; // physics keeps bodies inside this circle
-		static constexpr float kSeaLevel = -.5f;
+		static constexpr float kWalkRadius = 350.0f; // physics keeps bodies inside this circle
+		static constexpr float kSeaLevel = 0.0f;
 
 		float Height(float x, float z) const override;
 

@@ -37,6 +37,7 @@ struct Light {
     float innerDegrees = 12.0f; // spot only
     float outerDegrees = 22.0f;
     bool enabled = true;
+    bool castShadow = false; // point/spot: the nearest few casters get a shadow map
 };
 
 // Per-instance emissive multiplier, used by flickering lamps.

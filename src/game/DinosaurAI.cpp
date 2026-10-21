@@ -46,14 +46,15 @@ namespace game
 
 		UpdateAudio(dt);
 		UpdateAnimation();
+
+		m_aiContext.deltaTime = dt;
+		m_behaviorTree.Tick(m_aiContext);
 	}
 
-	void DinosaurAI::OnFixedUpdate(float /*dt*/)
+	void DinosaurAI::OnFixedUpdate(float dt)
 	{
 		if (!m_body || (m_health && m_health->Dead()))
 			return;
-
-		m_behaviorTree.Tick(m_aiContext);
 	}
 
 	void DinosaurAI::InitializeBehaviorTree()
@@ -208,7 +209,7 @@ namespace game
 		root->SetChild(prioritySelector);
 
 		m_behaviorTree.SetRoot(root);
-		m_behaviorTree.Print(root);
+		// m_behaviorTree.Print(root);
 	}
 
 	void DinosaurAI::UpdateAudio(float dt)

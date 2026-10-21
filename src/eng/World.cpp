@@ -62,9 +62,9 @@ namespace eng
 		return defaultCamera;
 	}
 
-	void World::UnregisterEmitter(ParticleEmitter *e)
+	void World::UnregisterParticles(ParticleSystemComponent *e)
 	{
-		m_emitters.erase(std::remove(m_emitters.begin(), m_emitters.end(), e), m_emitters.end());
+		m_particleComponents.erase(std::remove(m_particleComponents.begin(), m_particleComponents.end(), e), m_particleComponents.end());
 		if (m_bloodEmitter == e)
 			m_bloodEmitter = nullptr;
 	}
@@ -72,18 +72,24 @@ namespace eng
 	void World::EmitBlood(const glm::vec3 &position, const glm::vec3 &direction, int count)
 	{
 		if (!m_bloodEmitter)
-			m_bloodEmitter = &CreateGameObject("BloodFX").AddComponent<ParticleEmitter>(EmitterType::Blood);
-		m_bloodEmitter->Burst(position, direction, count);
+		{
+			m_bloodEmitter = &CreateGameObject("BloodFX").AddComponent<ParticleSystemComponent>();
+			ConfigureBlood(*m_bloodEmitter);
+		}
+		m_bloodEmitter->Primary().Emit(position, direction, count);
 	}
 
 	void World::Update(float dt, const gfx::Camera &camera)
 	{
 		m_deltaTime = dt;
+		m_dayNight.Advance(dt);
+		m_windTime += dt;
 
 		for (size_t i = 0; i < m_objects.size(); ++i)
 			m_objects[i]->Update(dt);
 
-		m_accumulator = std::min(m_accumulator + dt, 0.25f);
+		// Cap catch-up steps so a slow frame can't snowball into ever more AI/physics work.
+		m_accumulator = std::min(m_accumulator + dt, 4.0f * kFixedStep);
 		while (m_accumulator >= kFixedStep)
 		{
 			for (size_t i = 0; i < m_objects.size(); ++i)
@@ -111,7 +117,48 @@ namespace eng
 		const glm::mat4 proj = camera.Projection(aspect);
 		const glm::mat4 viewProj = proj * view;
 
+		m_renderer.SetWind(m_windTime, m_windDirection);
 		m_renderer.Build(m_registry);
+
+		// Sun and moon from the clock replace scene-authored directional lights.
+		const bool cycle = m_dayNight.enabled;
+		const glm::vec3 sunDir = m_dayNight.SunDirection();
+		if (cycle && environment)
+			environment->SetSunDirection(sunDir);
+
+		gfx::LightData sun, moon;
+		bool shadowsOn = false;
+		if (cycle)
+		{
+			const float sunElev = sunDir.y;
+			const float sunI = 3.0f * glm::smoothstep(-0.02f, 0.15f, sunElev);
+			sun.type = gfx::LightType::Directional;
+			sun.direction = -sunDir;
+			sun.color = glm::mix(glm::vec3(1.0f, 0.55f, 0.3f), glm::vec3(1.0f, 0.96f, 0.85f), glm::smoothstep(0.0f, 0.4f, sunElev)) * sunI;
+
+			const float moonI = glm::smoothstep(-0.02f, 0.15f, -sunElev);
+			moon.type = gfx::LightType::Directional;
+			moon.direction = sunDir;
+			moon.color = glm::vec3(0.35f, 0.42f, 0.65f) * moonI;
+
+			const bool sunCasts = sunI >= moonI;
+			gfx::LightData &caster = sunCasts ? sun : moon;
+			const float casterElev = sunCasts ? sunElev : -sunElev;
+			shadowsOn = casterElev > 0.03f && glm::length(caster.color) > 0.01f;
+			caster.castShadow = shadowsOn;
+			if (shadowsOn)
+				m_shadows.Prepare(camera, aspect, caster.direction);
+		}
+
+		if (shadowsOn)
+		{
+			for (int c = 0; c < gfx::ShadowMap::kCascades; ++c)
+			{
+				m_shadows.Begin(c);
+				m_renderer.DepthPass(m_shadows.ViewProj(c));
+				m_shadows.End();
+			}
+		}
 		m_renderer.DepthPass(viewProj);
 
 		// Directional lights first, then the nearest local lights up to the Forward+ budget.
@@ -123,10 +170,19 @@ namespace eng
 				gfx::LightData data;
 			};
 			std::vector<Candidate> found;
+			if (cycle)
+			{
+				if (glm::length(sun.color) > 0.001f)
+					lights.push_back(sun);
+				if (glm::length(moon.color) > 0.001f)
+					lights.push_back(moon);
+			}
 			m_registry.view<Transform, Light>().each(
 				[&](const Transform &t, const Light &l)
 				{
 					if (!l.enabled || l.intensity <= 0.001f)
+						return;
+					if (cycle && l.type == gfx::LightType::Directional)
 						return;
 					gfx::LightData d;
 					d.type = l.type;
@@ -136,6 +192,7 @@ namespace eng
 					d.direction = t.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
 					d.innerCos = std::cos(glm::radians(l.innerDegrees));
 					d.outerCos = std::cos(glm::radians(l.outerDegrees));
+					d.castShadow = l.castShadow;
 
 					const glm::vec3 to = t.position - camera.position;
 					const float d2 = l.type == gfx::LightType::Directional ? -1.0f : glm::dot(to, to);
@@ -147,20 +204,47 @@ namespace eng
 			for (size_t i = 0; i < found.size() && i < static_cast<size_t>(gfx::kMaxLights); ++i)
 				lights.push_back(found[i].data);
 		}
+
+		// The nearest shadow-casting point/spot lights get a slot; their faces are rendered now.
+		m_localShadows.Reset();
+		for (gfx::LightData &l : lights)
+		{
+			if (l.type == gfx::LightType::Directional || !l.castShadow)
+				continue;
+			if (m_localShadows.Full() || glm::distance(l.position, camera.position) > l.range + 40.0f)
+				continue;
+			int faces = 0;
+			l.shadowSlot = m_localShadows.Assign(l, faces);
+			for (int f = 0; f < faces; ++f)
+			{
+				m_localShadows.Begin(l.shadowSlot, f);
+				m_renderer.DepthPass(m_localShadows.ViewProj(l.shadowSlot, f), true);
+				m_localShadows.End();
+			}
+		}
 		m_forwardPlus.Cull(lights, depthTexture, view, proj, width, height);
 
 		if (environment)
 			environment->BindForLighting();
+		m_shadows.Bind(shadowsOn);
+		m_localShadows.Bind();
 		m_renderer.ShadePass(viewProj, camera.position, m_forwardPlus.TilesX());
 		if (environment)
 			environment->DrawSky(view, proj, camera.position);
 
+
 		m_particleRenderer.Begin();
-		for (ParticleEmitter *e : m_emitters)
+		for (ParticleSystemComponent *e : m_particleComponents)
 			e->Collect(m_particleRenderer);
 		m_particleRenderer.Render(view, proj, camera.position);
 
-		m_lineRenderer.Begin(m_deltaTime);
+		if (m_navDebugDirty && m_worldQuery)
+			RebuildNavDebug();
+		UpdateNavDebugVisibility(camera.position);
+
+		m_renderer.OverlayPass(viewProj);
+		m_quadRenderer.Render(viewProj);
+		m_lineRenderer.Begin(m_deltaTime, viewProj);
 		m_lineRenderer.Render(viewProj);
 	}
 
@@ -169,9 +253,81 @@ namespace eng
 		m_worldQuery = query;
 		if (m_worldQuery)
 		{
-			m_navigationGrid.Initialize(75, 75, 10.0f, *m_worldQuery);
-			m_lineRenderer.DrawPersistentLine({[this](gfx::LineRenderer &lr) { lr.DrawNavigationGrid(m_navigationGrid); }, -1.0f});
+			// Cell size 2m covers the 700m terrain with 350x350 cells (4x cheaper than 1m).
+			const float cellSize = 2.0f;
+			const int cells = static_cast<int>(2.0f * m_worldQuery->GetHalfSize() / cellSize);
+			m_navigationGrid.Initialize(cells, cells, cellSize, *m_worldQuery);
+			m_navDebugDirty = true;
 		}
+	}
+
+	void World::RebuildNavDebug()
+	{
+		m_navDebugDirty = false;
+		auto &grid = m_navigationGrid;
+		if (grid.width <= 0 || grid.height <= 0)
+			return;
+
+		const bool first = m_navChunks.empty();
+		size_t index = 0;
+		for (int y0 = 0; y0 < grid.height; y0 += kNavChunkCells)
+		{
+			for (int x0 = 0; x0 < grid.width; x0 += kNavChunkCells, ++index)
+			{
+				const int x1 = std::min(x0 + kNavChunkCells, grid.width);
+				const int y1 = std::min(y0 + kNavChunkCells, grid.height);
+				auto buildGrid = [&](gfx::LineRenderer &lr) { lr.DrawNavigationGrid(grid, 1, x0, y0, x1, y1); };
+
+				if (first)
+				{
+					NavChunk c;
+					const auto &a = grid.cells[y0 * grid.width + x0].position;
+					const auto &b = grid.cells[(y1 - 1) * grid.width + (x1 - 1)].position;
+					c.center = {(a.x + b.x) * 0.5f, (a.z + b.z) * 0.5f};
+					c.grid = m_lineRenderer.CreateStaticBatch(buildGrid);
+					m_lineRenderer.SetStaticBatchVisible(c.grid, false);
+					m_navChunks.push_back(c);
+				}
+				else
+				{
+					m_lineRenderer.RebuildStaticBatch(m_navChunks[index].grid, buildGrid);
+				}
+			}
+		}
+
+		m_renderer.SetOverlayMesh(m_meshes.Create(grid.BuildMesh()));
+		m_renderer.SetOverlayStyle(m_navDebugMode == 2 ? 1 : 0, {grid.cells.front().position.x, grid.cells.front().position.z}, grid.cellSize);
+		m_renderer.SetOverlayVisible(m_navMeshVisible);
+	}
+
+	void World::UpdateNavDebugVisibility(const glm::vec3 &cameraPos)
+	{
+		const float reach = kNavDrawRadius + kNavChunkCells * m_navigationGrid.cellSize;
+		for (const NavChunk &c : m_navChunks)
+		{
+			const bool near = glm::distance(c.center, glm::vec2(cameraPos.x, cameraPos.z)) < reach;
+			m_lineRenderer.SetStaticBatchVisible(c.grid, near && m_navGridVisible);
+		}
+	}
+
+	void World::SetNavDebugMode(int mode)
+	{
+		m_navDebugMode = mode & 3;
+		m_navGridVisible = m_navDebugMode == 3;
+		m_navMeshVisible = m_navDebugMode == 1 || m_navDebugMode == 2;
+		m_renderer.SetOverlayMode(m_navDebugMode == 2 ? 1 : 0);
+		m_renderer.SetOverlayVisible(m_navMeshVisible);
+	}
+
+	void World::SetNavGridVisible(bool visible)
+	{
+		m_navGridVisible = visible;
+	}
+
+	void World::SetNavMeshVisible(bool visible)
+	{
+		m_navMeshVisible = visible;
+		m_renderer.SetOverlayVisible(visible);
 	}
 
 	float World::GetTerrainHeight(float x, float z) const
@@ -186,16 +342,18 @@ namespace eng
 
 	bool World::FindRandomReachablePoint(glm::vec3 &out, const glm::vec3 &center, float radius) const
 	{
-		std::random_device rd;
-		std::mt19937 gen(rd());
+		static thread_local std::mt19937 gen{std::random_device{}()};
+
+		if (m_worldQuery && m_navigationGrid.width > 0)
+			return m_navigationGrid.RandomReachablePoint(center, radius, 8.0f, gen, out);
+
 		std::uniform_real_distribution<float> distX(center.x - radius, center.x + radius);
 		std::uniform_real_distribution<float> distZ(center.z - radius, center.z + radius);
 
-		const int maxAttempts = 100;
-		for (int attempt = 0; attempt < maxAttempts; ++attempt)
+		for (int attempt = 0; attempt < 100; ++attempt)
 		{
-			float x = distX(gen);
-			float z = distZ(gen);
+			const float x = distX(gen);
+			const float z = distZ(gen);
 			if (IsWalkable(x, z))
 			{
 				out = glm::vec3(x, GetTerrainHeight(x, z), z);
@@ -203,6 +361,13 @@ namespace eng
 			}
 		}
 		return false;
+	}
+
+	void World::AddNavigationObstacle(const glm::vec3 &position, const glm::vec3 &halfExtents)
+	{
+		// Agent clearance in metres (was 5m, which swallowed everything around obstacles).
+		m_navigationGrid.AddBoxObstacle(position, halfExtents.x, halfExtents.z, 0.6f);
+		m_navDebugDirty = true;
 	}
 
 } // namespace eng

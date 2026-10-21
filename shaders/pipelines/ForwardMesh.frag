@@ -1,5 +1,5 @@
-#version 460 core
-
+// Shared fragment stage for forward-shaded meshes (Forward+ lights, cascaded and local shadows, IBL).
+// A material's .frag supplies `#version 460 core`, includes this file, then defines `Surface GetSurface()`.
 in VS_OUT {
     vec3 worldPos;
     vec2 uv;
@@ -18,11 +18,23 @@ layout(binding = 4) uniform samplerCube uPrefilterMap;
 layout(binding = 5) uniform sampler2D uBrdfLut;
 
 uniform vec4 uBaseColor;
+uniform float uAlphaCutoff;
 uniform float uMetallic;
 uniform float uRoughness;
 uniform float uAO;
 uniform vec3 uEmissive;
 uniform vec3 uCameraPos;
+// Surface description a material shader fills in; the pipeline lights it.
+struct Surface {
+    vec3 albedo;
+    float alpha;
+    float metallic;
+    float roughness;
+    vec3 normal; // world space, already facing the viewer for back faces
+};
+
+// Implemented by the material shader (after including this file).
+Surface GetSurface();
 
 // Forward+ light data (see gfx/ForwardPlus.h and light_cull.comp)
 struct Light {
@@ -40,6 +52,83 @@ layout(std430, binding = 4) readonly buffer TileCounts { uint tileCounts[]; };
 layout(std430, binding = 5) readonly buffer TileIndices { uint tileIndices[]; };
 
 uniform int uTileCountX;
+
+// Cascaded directional shadow map (gfx/ShadowMap.cpp)
+layout(std140, binding = 0) uniform ShadowBlock {
+    mat4 shadowVP[3];
+    vec4 cascadeSplits;   // xyz far view-depth of each cascade
+    vec4 cascadeTexel;    // xyz world-space size of one shadow texel per cascade
+    vec4 shadowParams;    // xyz camera forward, w shadow distance
+};
+layout(binding = 7) uniform sampler2DArrayShadow uShadowMap;
+
+// Point/spot shadows (gfx/LocalShadowMap.cpp): 6 layers per slot
+layout(std140, binding = 1) uniform LocalShadowBlock {
+    mat4 localVP[24];
+    vec4 localInfo[4]; // x = world texel size per unit distance
+};
+layout(binding = 8) uniform sampler2DArrayShadow uLocalShadow;
+
+float LocalShadowFactor(int slot, vec3 lightPos, bool isPoint, vec3 N, vec3 L) {
+    vec3 toP = fs.worldPos - lightPos;
+    float dist = length(toP);
+    int face = 0;
+    if (isPoint) {
+        vec3 a = abs(toP);
+        if (a.x >= a.y && a.x >= a.z)
+            face = toP.x > 0.0 ? 0 : 1;
+        else if (a.y >= a.z)
+            face = toP.y > 0.0 ? 2 : 3;
+        else
+            face = toP.z > 0.0 ? 4 : 5;
+    }
+
+    float texel = localInfo[slot].x * dist;
+    float slope = 1.0 - max(dot(N, L), 0.0);
+    vec3 p = fs.worldPos + N * texel * (1.0 + 1.5 * slope) + L * texel;
+
+    int layer = slot * 6 + face;
+    vec4 sc = localVP[layer] * vec4(p, 1.0);
+    if (sc.w <= 0.0)
+        return 1.0;
+    vec3 uvz = sc.xyz / sc.w * 0.5 + 0.5;
+    if (uvz.z >= 1.0 || uvz.x < 0.0 || uvz.y < 0.0 || uvz.x > 1.0 || uvz.y > 1.0)
+        return 1.0;
+
+    vec2 invSize = 1.0 / vec2(textureSize(uLocalShadow, 0).xy);
+    float sum = 0.0;
+    for (int x = -1; x <= 1; ++x)
+        for (int y = -1; y <= 1; ++y)
+            sum += texture(uLocalShadow, vec4(uvz.xy + vec2(x, y) * invSize, float(layer), uvz.z));
+    return sum / 9.0;
+}
+
+float ShadowFactor(vec3 N, vec3 L) {
+    float viewDepth = dot(fs.worldPos - uCameraPos, shadowParams.xyz);
+    if (viewDepth >= shadowParams.w)
+        return 1.0;
+
+    int c = viewDepth < cascadeSplits.x ? 0 : (viewDepth < cascadeSplits.y ? 1 : 2);
+    float texel = cascadeTexel[c];
+    float slope = 1.0 - max(dot(N, L), 0.0);
+    vec3 p = fs.worldPos + N * texel * (1.0 + 1.5 * slope);
+
+    vec4 sc = shadowVP[c] * vec4(p, 1.0);
+    vec3 uvz = sc.xyz * 0.5 + 0.5;
+    if (uvz.z >= 1.0)
+        return 1.0;
+
+    const float bias = 3e-4;
+    vec2 invSize = 1.0 / vec2(textureSize(uShadowMap, 0).xy);
+    float sum = 0.0;
+    for (int x = -1; x <= 1; ++x)
+        for (int y = -1; y <= 1; ++y)
+            sum += texture(uShadowMap, vec4(uvz.xy + vec2(x, y) * invSize, float(c), uvz.z - bias));
+    float shadow = sum / 9.0;
+
+    float fade = 1.0 - smoothstep(0.85, 1.0, viewDepth / shadowParams.w);
+    return mix(1.0, shadow, fade);
+}
 
 const float PI = 3.14159265359;
 const float MAX_REFLECTION_LOD = 4.0; // prefilter mip count - 1
@@ -96,6 +185,8 @@ vec3 EvaluateLight(Light light, vec3 N, vec3 V, float NdotV, vec3 F0, vec3 albed
 
     if (type == 2) { // directional
         L = -normalize(light.directionInner.xyz);
+        if (light.outer.y > 0.5)
+            attenuation = ShadowFactor(N, L);
     } else {
         vec3 toLight = light.positionRange.xyz - fs.worldPos;
         float d2 = dot(toLight, toLight);
@@ -105,19 +196,21 @@ vec3 EvaluateLight(Light light, vec3 N, vec3 V, float NdotV, vec3 F0, vec3 albed
         L = normalize(toLight);
         if (type == 1) // spot
             attenuation *= smoothstep(light.outer.x, light.directionInner.w, dot(-L, normalize(light.directionInner.xyz)));
+        if (light.outer.z > 0.5 && attenuation > 0.0)
+            attenuation *= LocalShadowFactor(int(light.outer.z + 0.5) - 1, light.positionRange.xyz, type == 0, N, L);
     }
     return Shade(L, light.colorType.rgb * attenuation, N, V, NdotV, F0, albedo, metallic, roughness);
 }
 
 void main() {
-    vec4 albedoSample = texture(uAlbedoMap, fs.uv) * uBaseColor;
-    vec3 albedo = albedoSample.rgb;
-    vec3 mr = texture(uMetalRoughMap, fs.uv).rgb;
-    float roughness = clamp(uRoughness * mr.g, 0.04, 1.0);
-    float metallic = clamp(uMetallic * mr.b, 0.0, 1.0);
+    Surface s = GetSurface();
+    if (s.alpha < uAlphaCutoff)
+        discard;
+    vec3 albedo = s.albedo;
+    float roughness = clamp(s.roughness, 0.04, 1.0);
+    float metallic = clamp(s.metallic, 0.0, 1.0);
 
-    vec3 tn = texture(uNormalMap, fs.uv).xyz * 2.0 - 1.0;
-    vec3 N = normalize(fs.tbn * tn);
+    vec3 N = s.normal;
     vec3 V = normalize(uCameraPos - fs.worldPos);
     float NdotV = max(dot(N, V), 1e-4);
 
@@ -148,5 +241,5 @@ void main() {
     // color = mix(color, fogColor, clamp(fog, 0.0, 1.0));
 
     // Linear HDR output; tone mapping happens in the composite pass.
-    outColor = vec4(color, albedoSample.a);
+    outColor = vec4(color, s.alpha);
 }

@@ -39,7 +39,7 @@ namespace eng
 		Path GetSmoothedPath(const Path &path);
 
 	private:
-		int ToId(const Node &pos) const { return pos.gridPos.x + pos.gridPos.y * grid.width; }
+		int ToId(const Node &pos) const { return pos.gridPos.y * grid.width + pos.gridPos.x; }
 
 		NodeList GetNeighbors(const Node *node) const;
 

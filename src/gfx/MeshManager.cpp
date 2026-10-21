@@ -24,6 +24,7 @@ namespace gfx
         mesh.baseVertex = m_vertexCount;
         mesh.firstIndex = m_indexCount;
         mesh.indexCount = static_cast<uint32_t>(data.indices.size());
+        mesh.bounds = data.ComputeBounds();
 
         m_vbo.Append(data.vertices.data(), data.vertices.size() * sizeof(Vertex));
         m_ibo.Append(data.indices.data(), data.indices.size() * sizeof(uint32_t));

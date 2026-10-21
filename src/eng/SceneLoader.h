@@ -2,7 +2,7 @@
 #include "eng/GameObject.h"
 #include "eng/Scene.h"
 #include "gfx/Mesh.h"
-#include "gfx/Shader.h"
+#include "gfx/ShaderLibrary.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -25,7 +25,7 @@ namespace eng
 
         // Registers the built-in "cube" (halfSize), "sphere" (radius), "plane" (halfSize, uvScale) and
         // "model" (path via MeshDesc::path, params[0] = uniform scale; loaded with assimp) meshes.
-        explicit SceneLoader(std::shared_ptr<gfx::Shader> shader);
+        explicit SceneLoader(std::shared_ptr<gfx::ShaderLibrary> shaders);
 
         // Every kind is replaced by assets/models/<kind>.(glb|gltf|obj|fbx|dae) when that file exists, unless
         // registered with overridable = false (the factory then handles overrides itself).
@@ -40,7 +40,7 @@ namespace eng
         void Instantiate(World &world, const SceneData &scene) const;
 
     private:
-        std::shared_ptr<gfx::Shader> m_shader;
+        std::shared_ptr<gfx::ShaderLibrary> m_shaders;
         std::unordered_map<std::string, MeshFactory> m_meshes;
         std::unordered_set<std::string> m_fixedMeshes;
         std::unordered_map<std::string, ScriptFactory> m_scripts;

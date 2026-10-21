@@ -109,6 +109,9 @@ namespace ai
 		std::string m_target;
 		float m_speed = 0.0f;
 		float m_stopDistance = 1.0f;
+		float m_repathInterval = 0.5f;
+		float m_repathTargetDistance = 2.0f;
+		float m_failCooldown = 1.0f;
 
 		void OnStart(ai::AIContext &ctx) override;
 
@@ -117,6 +120,13 @@ namespace ai
 	private:
 		eng::PathFinder::Path m_path;
 		int m_currentNodeIndex = -1;
+
+		bool Repath(ai::AIContext &ctx);
+		glm::vec3 m_targetPosition{0.0f};
+		float m_sinceLastRepath = 0.0f;
+		float m_cooldown = 0.0f;
+		glm::vec3 m_progressPos{0.0f};
+		float m_stuckTime = 0.0f;
 	};
 
 	struct FindRandomReachablePoint : public ai::Node

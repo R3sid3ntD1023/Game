@@ -45,6 +45,21 @@ namespace gfx
 		return tex;
 	}
 
+	std::shared_ptr<Texture> Texture::FromMemory(const unsigned char *bytes, size_t size, bool srgb)
+	{
+		int w = 0, h = 0, n = 0;
+		stbi_set_flip_vertically_on_load(true);
+		unsigned char *data = stbi_load_from_memory(bytes, static_cast<int>(size), &w, &h, &n, 4);
+		if (!data)
+		{
+			spdlog::error("Failed to decode embedded texture: {}", stbi_failure_reason());
+			return FromColor(glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), srgb);
+		}
+		auto tex = std::make_shared<Texture>(data, w, h, srgb);
+		stbi_image_free(data);
+		return tex;
+	}
+
 	std::shared_ptr<Texture> Texture::FromColor(const glm::vec4 &c, bool srgb)
 	{
 		auto to8 = [](float v) { return static_cast<unsigned char>(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f); };

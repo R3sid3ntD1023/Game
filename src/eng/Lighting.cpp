@@ -11,7 +11,7 @@ namespace eng
 	void LightComponent::OnAttach()
 	{
 		auto &registry = gameObject->GetWorld().Registry();
-		registry.emplace_or_replace<Light>(gameObject->Entity(), Light{type, color, intensity, range, innerDegrees, outerDegrees, true});
+		registry.emplace_or_replace<Light>(gameObject->Entity(), Light{type, color, intensity, range, innerDegrees, outerDegrees, true, castShadow});
 		registry.get_or_emplace<EmissiveScale>(gameObject->Entity());
 	}
 
@@ -19,6 +19,13 @@ namespace eng
 	{
 		if (auto *light = gameObject->GetWorld().Registry().try_get<Light>(gameObject->Entity()))
 			light->enabled = enabled;
+	}
+
+	void LightComponent::SetCastShadow(bool cast)
+	{
+		castShadow = cast;
+		if (auto *light = gameObject->GetWorld().Registry().try_get<Light>(gameObject->Entity()))
+			light->castShadow = cast;
 	}
 
 	void CameraFollower::OnUpdate(float)

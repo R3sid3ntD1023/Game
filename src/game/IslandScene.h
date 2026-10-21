@@ -23,13 +23,15 @@ namespace game
 	inline constexpr const char *kMeshTreeTrunk = "tree_trunk";	  // params: seed
 	inline constexpr const char *kMeshTreeCanopy = "tree_canopy"; // params: seed
 	inline constexpr const char *kMeshFern = "fern";			  // params: seed
+	inline constexpr const char *kMeshGrass = "grass_tuft";		  // params: seed
 
 	struct IslandParams
 	{
 
-		int trees = 0;
-		int ferns = 0;
-		int rocks = 0;
+		int trees = 20;
+		int ferns = 50;
+		int grassClumps = 400; // each clump scatters several tufts
+		int rocks = 20;
 		int raptors = 10;
 		int buildings = 10;
 		int posts = 24;

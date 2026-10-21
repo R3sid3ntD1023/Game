@@ -22,6 +22,10 @@ namespace eng
         std::string albedoMap;
         std::string normalMap;
         std::string metalRoughMap;
+        // Foliage sway in metres, shader type (file name in shaders/materials; empty = Standard), and two-sided rendering.
+        float windStrength = 0.0f;
+        std::string shader;
+        bool doubleSided = false;
 
         template <class Archive>
         void serialize(Archive &ar)
@@ -29,7 +33,8 @@ namespace eng
             ar(cereal::make_nvp("name", name), cereal::make_nvp("color", color), cereal::make_nvp("metallic", metallic),
                cereal::make_nvp("roughness", roughness), cereal::make_nvp("emissive", emissive),
                cereal::make_nvp("albedoMap", albedoMap), cereal::make_nvp("normalMap", normalMap),
-               cereal::make_nvp("metalRoughMap", metalRoughMap));
+               cereal::make_nvp("metalRoughMap", metalRoughMap), cereal::make_nvp("windStrength", windStrength),
+               cereal::make_nvp("shader", shader), cereal::make_nvp("doubleSided", doubleSided));
         }
     };
 
@@ -40,12 +45,15 @@ namespace eng
         std::string kind;
         std::vector<float> params;
         std::string path; // kind "model": mesh file relative to the assets folder
+        // kind "model": use the materials and textures stored in the file. Objects with material -1 get them;
+        // objects that name a scene material override them.
+        bool importMaterials = false;
 
         template <class Archive>
         void serialize(Archive &ar)
         {
             ar(cereal::make_nvp("name", name), cereal::make_nvp("kind", kind), cereal::make_nvp("params", params),
-               cereal::make_nvp("path", path));
+               cereal::make_nvp("path", path), cereal::make_nvp("importMaterials", importMaterials));
         }
     };
 
@@ -78,7 +86,7 @@ namespace eng
     struct SceneData
     {
         static constexpr uint32_t kMagic = 0x57444C47; // "GLDW"
-        static constexpr uint32_t kVersion = 5;
+        static constexpr uint32_t kVersion = 10;
 
         std::vector<MaterialDesc> materials;
         std::vector<MeshDesc> meshes;

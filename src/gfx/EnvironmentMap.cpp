@@ -1,6 +1,7 @@
 #include "gfx/EnvironmentMap.h"
 #include <algorithm>
 #include <cmath>
+#include <glm/gtc/matrix_transform.hpp>
 #include <spdlog/spdlog.h>
 #include <stb_image.h>
 #include <vector>
@@ -14,7 +15,7 @@ namespace gfx
         constexpr int kEnvSize = 512;
         constexpr int kIrradianceSize = 32;
         constexpr int kPrefilterSize = 128;
-        constexpr int kPrefilterLevels = 5; // keep in sync with MAX_REFLECTION_LOD in brdf.frag
+        constexpr int kPrefilterLevels = 5; // keep in sync with MAX_REFLECTION_LOD in ForwardMesh.frag
         constexpr int kLutSize = 512;
 
         GLuint CreateCube(int size, int levels)
@@ -60,7 +61,7 @@ namespace gfx
             return px;
         }
 
-        // Moonlit night: dark gradient, scattered stars and a moon where brdf.frag puts its moonlight.
+        // Moonlit night: dark gradient, scattered stars and a moon where ForwardMesh.frag puts its moonlight.
         std::vector<float> ProceduralNightSky(int w, int h)
         {
             std::vector<float> px(static_cast<size_t>(w) * h * 4);
@@ -148,14 +149,24 @@ namespace gfx
     EnvironmentMap::EnvironmentMap(const std::string &hdrPath) : m_sky(SHADER_DIR "sky.vert", SHADER_DIR "sky.frag")
     {
         glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
-        const GLuint equirect = LoadEquirect(hdrPath);
+        m_procedural = hdrPath.empty();
 
-        // 1. Equirect -> cubemap (with mips, used for blurred sampling by later passes)
         int envLevels = 1;
         for (int s = kEnvSize; s > 1; s >>= 1)
             ++envLevels;
         m_env = CreateCube(kEnvSize, envLevels);
+        m_irradiance = CreateCube(kIrradianceSize, 1);
+        m_prefilter = CreateCube(kPrefilterSize, kPrefilterLevels);
+
+        if (m_procedural)
         {
+            m_sunDir = glm::normalize(glm::vec3(0.4f, 0.8f, -0.3f));
+            m_bakedSunDir = m_sunDir;
+            BakeProceduralCube();
+        }
+        else
+        {
+            const GLuint equirect = LoadEquirect(hdrPath);
             Shader cs(SHADER_DIR "equirect_to_cube.comp");
             cs.Bind();
             glBindTextureUnit(0, equirect);
@@ -163,37 +174,11 @@ namespace gfx
             glDispatchCompute(Groups(kEnvSize), Groups(kEnvSize), 6);
             glMemoryBarrier(GL_ALL_BARRIER_BITS);
             glGenerateTextureMipmap(m_env);
+            glDeleteTextures(1, &equirect);
         }
+        BuildLighting();
 
-        // 2. Diffuse irradiance
-        m_irradiance = CreateCube(kIrradianceSize, 1);
-        {
-            Shader cs(SHADER_DIR "irradiance.comp");
-            cs.Bind();
-            glBindTextureUnit(0, m_env);
-            glBindImageTexture(0, m_irradiance, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA16F);
-            glDispatchCompute(Groups(kIrradianceSize), Groups(kIrradianceSize), 6);
-            glMemoryBarrier(GL_ALL_BARRIER_BITS);
-        }
-
-        // 3. Specular prefilter, one roughness per mip
-        m_prefilter = CreateCube(kPrefilterSize, kPrefilterLevels);
-        {
-            Shader cs(SHADER_DIR "prefilter.comp");
-            cs.Bind();
-            cs.SetFloat("uEnvResolution", static_cast<float>(kEnvSize));
-            glBindTextureUnit(0, m_env);
-            for (int mip = 0; mip < kPrefilterLevels; ++mip)
-            {
-                const int size = kPrefilterSize >> mip;
-                cs.SetFloat("uRoughness", static_cast<float>(mip) / static_cast<float>(kPrefilterLevels - 1));
-                glBindImageTexture(0, m_prefilter, mip, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA16F);
-                glDispatchCompute(Groups(size), Groups(size), 6);
-            }
-            glMemoryBarrier(GL_ALL_BARRIER_BITS);
-        }
-
-        // 4. BRDF integration LUT
+        // BRDF integration LUT (independent of the sky)
         glCreateTextures(GL_TEXTURE_2D, 1, &m_brdf);
         glTextureStorage2D(m_brdf, 1, GL_RG16F, kLutSize, kLutSize);
         glTextureParameteri(m_brdf, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -207,8 +192,96 @@ namespace gfx
             glDispatchCompute(Groups(kLutSize), Groups(kLutSize), 1);
             glMemoryBarrier(GL_ALL_BARRIER_BITS);
         }
+    }
 
-        glDeleteTextures(1, &equirect);
+    void EnvironmentMap::BakeProceduralCube()
+    {
+        static const glm::vec3 dirs[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+        static const glm::vec3 ups[6] = {{0, -1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}, {0, -1, 0}};
+
+        GLint prevFbo = 0;
+        GLint prevViewport[4];
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+        glGetIntegerv(GL_VIEWPORT, prevViewport);
+        const GLboolean depthTest = glIsEnabled(GL_DEPTH_TEST);
+        const GLboolean cull = glIsEnabled(GL_CULL_FACE);
+
+        GLuint fbo = 0;
+        glCreateFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glViewport(0, 0, kEnvSize, kEnvSize);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+
+        const glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
+        m_sky.Bind();
+        m_sky.SetInt("uProcedural", 1);
+        m_sky.SetInt("uBake", 1);
+        m_sky.SetVec3("uSunDir", m_sunDir);
+        m_sky.SetVec3("uCameraPos", glm::vec3(0.0f));
+        m_vao.Bind();
+        for (int face = 0; face < 6; ++face)
+        {
+            glNamedFramebufferTextureLayer(fbo, GL_COLOR_ATTACHMENT0, m_env, 0, face);
+            m_sky.SetMat4("uInvViewProj", glm::inverse(proj * glm::lookAt(glm::vec3(0.0f), dirs[face], ups[face])));
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFbo));
+        glDeleteFramebuffers(1, &fbo);
+        glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+        if (depthTest)
+            glEnable(GL_DEPTH_TEST);
+        if (cull)
+            glEnable(GL_CULL_FACE);
+        glGenerateTextureMipmap(m_env);
+    }
+
+    void EnvironmentMap::SetSunDirection(const glm::vec3 &toSun)
+    {
+        if (!m_procedural)
+            return;
+        m_sunDir = glm::normalize(toSun);
+        if (glm::dot(m_sunDir, m_bakedSunDir) < 0.99966f) // ~1.5 degrees
+        {
+            m_bakedSunDir = m_sunDir;
+            BakeProceduralCube();
+            BuildLighting();
+        }
+    }
+
+    void EnvironmentMap::BuildLighting()
+    {
+        if (!m_irradianceCs)
+            m_irradianceCs = std::make_unique<Shader>(SHADER_DIR "irradiance.comp");
+        if (!m_prefilterCs)
+            m_prefilterCs = std::make_unique<Shader>(SHADER_DIR "prefilter.comp");
+
+        // Diffuse irradiance
+        {
+            Shader &cs = *m_irradianceCs;
+            cs.Bind();
+            glBindTextureUnit(0, m_env);
+            glBindImageTexture(0, m_irradiance, 0, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+            glDispatchCompute(Groups(kIrradianceSize), Groups(kIrradianceSize), 6);
+            glMemoryBarrier(GL_ALL_BARRIER_BITS);
+        }
+
+        // Specular prefilter, one roughness per mip
+        {
+            Shader &cs = *m_prefilterCs;
+            cs.Bind();
+            cs.SetFloat("uEnvResolution", static_cast<float>(kEnvSize));
+            glBindTextureUnit(0, m_env);
+            for (int mip = 0; mip < kPrefilterLevels; ++mip)
+            {
+                const int size = kPrefilterSize >> mip;
+                cs.SetFloat("uRoughness", static_cast<float>(mip) / static_cast<float>(kPrefilterLevels - 1));
+                glBindImageTexture(0, m_prefilter, mip, GL_TRUE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+                glDispatchCompute(Groups(size), Groups(size), 6);
+            }
+            glMemoryBarrier(GL_ALL_BARRIER_BITS);
+        }
     }
 
     EnvironmentMap::~EnvironmentMap()
@@ -232,6 +305,9 @@ namespace gfx
         m_sky.Bind();
         m_sky.SetMat4("uInvViewProj", glm::inverse(proj * view));
         m_sky.SetVec3("uCameraPos", cameraPos);
+        m_sky.SetInt("uProcedural", m_procedural ? 1 : 0);
+        m_sky.SetInt("uBake", 0);
+        m_sky.SetVec3("uSunDir", m_sunDir);
         glBindTextureUnit(6, m_env);
         m_vao.Bind();
         glDepthFunc(GL_LEQUAL);

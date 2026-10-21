@@ -30,7 +30,6 @@ namespace gfx
 
     void Material::Bind() const
     {
-        m_shader->Bind();
         albedoMap->Bind(0);
         normalMap->Bind(1);
         metalRoughMap->Bind(2);
@@ -42,6 +41,7 @@ namespace gfx
         m_shader->SetFloat("uRoughness", roughness);
         m_shader->SetFloat("uAO", ao);
         m_shader->SetVec3("uEmissive", emissive);
+        m_shader->SetFloat("uAlphaCutoff", alphaCutoff);
     }
 
 } // namespace gfx

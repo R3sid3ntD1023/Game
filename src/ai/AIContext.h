@@ -11,6 +11,7 @@ namespace ai
 {
 	struct AIContext
 	{
+		float deltaTime;
 		eng::GameObject *self;
 		Blackboard blackboard;
 	};

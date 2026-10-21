@@ -18,6 +18,8 @@ namespace gfx
 	{
 	public:
 		static std::shared_ptr<Texture> FromFile(const std::string &path, bool srgb);
+		// Decodes an encoded image (png/jpg/...) already in memory, e.g. a texture embedded in a .glb.
+		static std::shared_ptr<Texture> FromMemory(const unsigned char *bytes, size_t size, bool srgb);
 		static std::shared_ptr<Texture> FromColor(const glm::vec4 &color, bool srgb);
 		static DecodedTexture FromFileToBytes(const std::string &path);
 

@@ -4,7 +4,7 @@
 
 namespace gfx {
 
-enum class LightType : uint32_t { Point = 0, Spot = 1, Directional = 2 }; // values match brdf.frag / light_cull.comp
+enum class LightType : uint32_t { Point = 0, Spot = 1, Directional = 2 }; // values match ForwardMesh.frag / light_cull.comp
 
 constexpr int kMaxLights = 512;
 
@@ -17,6 +17,8 @@ struct LightData {
     glm::vec3 direction{ 0.0f, 0.0f, -1.0f }; // spot/directional: direction the light travels
     float innerCos = 1.0f;                // spot: full intensity inside this cone
     float outerCos = 0.9f;                // spot: zero intensity outside this cone
+    bool castShadow = false;              // directional: cascaded map; point/spot: needs shadowSlot
+    int shadowSlot = -1;                  // point/spot: LocalShadowMap slot assigned by World, -1 = none
 };
 
 } // namespace gfx

@@ -4,7 +4,7 @@
 #include "eng/AudioSource.h"
 #include "eng/BuiltinComponents.h"
 #include "eng/Lighting.h"
-#include "eng/ParticleEmitter.h"
+#include "eng/ParticleSystemComponent.h"
 #include "eng/RigidBody.h"
 #include "eng/Scene.h"
 #include "eng/SceneLoader.h"
@@ -13,6 +13,7 @@
 #include "game/EscapeZone.h"
 #include "game/FirstPersonController.h"
 #include "game/Game.h"
+#include "game/GrassGen.h"
 #include "game/Interaction.h"
 #include "game/IslandScene.h"
 #include "game/RaptorModel.h"
@@ -146,8 +147,8 @@ namespace game
 			spdlog::info("Generated world '{}' -> {}", worldName, path);
 		}
 
-		auto shader = std::make_shared<gfx::Shader>(SHADER_DIR "brdf.vert", SHADER_DIR "brdf.frag");
-		eng::SceneLoader loader(shader);
+		auto shaders = std::make_shared<gfx::ShaderLibrary>(SHADER_DIR "materials/");
+		eng::SceneLoader loader(shaders);
 
 		loader.RegisterMesh(kMeshTerrain, [this](const eng::MeshDesc &d) { return m_terrain.BuildMesh(static_cast<int>(Param(d.params, 0, 160.0f))); }, false);
 		// assets/models/raptor.* (rigged, faces +X, origin at the hit-box center) replaces the procedural raptor.
@@ -173,6 +174,7 @@ namespace game
 		loader.RegisterMesh(kMeshTreeTrunk, [](const eng::MeshDesc &d) { return GenerateRainforestTree(static_cast<uint32_t>(Param(d.params, 0, 100.0f))).trunk; });
 		loader.RegisterMesh(kMeshTreeCanopy, [](const eng::MeshDesc &d) { return GenerateRainforestTree(static_cast<uint32_t>(Param(d.params, 0, 100.0f))).canopy; });
 		loader.RegisterMesh(kMeshFern, [](const eng::MeshDesc &d) { return GenerateFern(static_cast<uint32_t>(Param(d.params, 0, 200.0f))); });
+		loader.RegisterMesh(kMeshGrass, [](const eng::MeshDesc &d) { return GenerateGrassTuft(static_cast<uint32_t>(Param(d.params, 0, 500.0f))); });
 
 		loader.RegisterScript(
 			kScriptPlayer,
@@ -190,7 +192,7 @@ namespace game
 
 				// The flashlight is a spot light entity that follows the camera; F toggles it.
 				auto &flashlight = m_world->CreateGameObject("Flashlight");
-				flashlight.AddComponent<eng::SpotLightComponent>(glm::vec3(1.0f, 0.95f, 0.85f), 220.0f, 50.0f, 11.0f, 21.0f);
+				flashlight.AddComponent<eng::SpotLightComponent>(glm::vec3(1.0f, 0.95f, 0.85f), 220.0f, 50.0f, 11.0f, 21.0f).SetCastShadow(true);
 				flashlight.AddComponent<eng::CameraFollower>(glm::vec3(0.15f, -0.12f, 0.3f));
 			}
 		);
@@ -254,7 +256,7 @@ namespace game
 			kScriptLightPost,
 			[](eng::GameObject &go, const std::vector<float> &p)
 			{
-				go.AddComponent<eng::PointLightComponent>(glm::vec3(Param(p, 4, 1.0f), Param(p, 5, 0.7f), Param(p, 6, 0.4f)), Param(p, 0, 120.0f), Param(p, 1, 28.0f));
+				go.AddComponent<eng::PointLightComponent>(glm::vec3(Param(p, 4, 1.0f), Param(p, 5, 0.7f), Param(p, 6, 0.4f)), Param(p, 0, 120.0f), Param(p, 1, 28.0f)).SetCastShadow(false);
 				go.AddComponent<eng::LightFlicker>(Param(p, 2, 0.5f), static_cast<uint32_t>(Param(p, 3, 1.0f)));
 			}
 		);
@@ -280,9 +282,8 @@ namespace game
 			kScriptRain,
 			[](eng::GameObject &go, const std::vector<float> &p)
 			{
-				auto &rain = go.AddComponent<eng::ParticleEmitter>(eng::EmitterType::Rain);
-				rain.amount = Param(p, 0, 1.0f);
-				rain.wind = glm::vec3(Param(p, 1, 2.5f), 0.0f, Param(p, 2, 1.0f));
+				auto &rain = go.AddComponent<eng::ParticleSystemComponent>();
+				eng::ConfigureRain(rain, Param(p, 0, 1.0f), glm::vec3(Param(p, 1, 2.5f), 0.0f, Param(p, 2, 1.0f)));
 				go.AddComponent<eng::AudioSource>("rain_loop", true, 0.55f, false);
 			}
 		);
@@ -366,6 +367,28 @@ namespace game
 					if (m_firstPersonController)
 						m_firstPersonController->enabled = !m_debugCameraEnabled;
 				}
+				if (m_world)
+				{
+					// [ and ] scrub the time of day (3 game hours per second); F3 pauses the clock.
+					auto &clock = m_world->DayNight();
+					const float scrub = static_cast<float>(dt) * 3.0f;
+					if (input.IsKeyDown(GLFW_KEY_LEFT_BRACKET))
+						clock.SetTime(clock.timeOfDay - scrub);
+					if (input.IsKeyDown(GLFW_KEY_RIGHT_BRACKET))
+						clock.SetTime(clock.timeOfDay + scrub);
+					static bool prevF3 = false;
+					const bool f3 = input.IsKeyDown(GLFW_KEY_F3);
+					if (f3 && !prevF3)
+						clock.paused = !clock.paused;
+					prevF3 = f3;
+
+					// F4 cycles the nav overlay: off -> walkable mesh -> slopes -> grid lines.
+					static bool prevF4 = false;
+					const bool f4 = input.IsKeyDown(GLFW_KEY_F4);
+					if (f4 && !prevF4)
+						m_world->SetNavDebugMode(m_world->NavDebugMode() + 1);
+					prevF4 = f4;
+				}
 			}
 			prevBloomKey = bloomKey;
 			prevRawKey = rawKey;
@@ -395,6 +418,7 @@ namespace game
 			{
 				m_post.Resize(size.x, size.y);
 				m_post.time = static_cast<float>(now);
+				m_post.exposure = glm::mix(1.6f, 0.85f, m_world->DayNight().Daylight());
 				m_post.BeginScene();
 				m_world->Render(static_cast<float>(size.x) / static_cast<float>(size.y), m_post.DepthTexture(), size.x, size.y, GetCamera());
 				m_post.EndScene(size.x, size.y);
@@ -418,7 +442,9 @@ namespace game
 			titleTimer += dt;
 			if (titleTimer >= 0.25)
 			{
-				m_window.SetTitle(std::format("Escape the Island | {} fps | {} draws", static_cast<int>(frames / titleTimer), m_world ? m_world->DrawCalls() : 0));
+				m_window.SetTitle(std::format("Escape the Island | {} fps | {} draws | {:02d}:{:02d}", static_cast<int>(frames / titleTimer), m_world ? m_world->DrawCalls() : 0,
+											  m_world ? static_cast<int>(m_world->DayNight().timeOfDay) : 0,
+											  m_world ? static_cast<int>(std::fmod(m_world->DayNight().timeOfDay, 1.0f) * 60.0f) : 0));
 				frames = 0;
 				titleTimer = 0.0;
 			}

@@ -12,6 +12,7 @@ class Material {
 public:
     explicit Material(std::shared_ptr<Shader> shader);
 
+    // Uploads textures and parameters to the material's shader, which the caller must already have bound.
     void Bind() const;
 
     uint32_t Id() const { return m_id; }
@@ -25,6 +26,12 @@ public:
     float roughness = 0.5f;
     float ao = 1.0f;
     glm::vec3 emissive{0.0f};
+    float alphaCutoff = 0.0f; // > 0: alpha-tested (depth passes sample albedo too)
+    bool doubleSided = false;
+    float windStrength = 0.0f; // vertex sway in metres (see shaders/wind.glsl)
+
+    bool IsCutout() const { return alphaCutoff > 0.0f; }
+    bool IsEmissive() const { return emissive.x > 0.0f || emissive.y > 0.0f || emissive.z > 0.0f; }
 
 private:
     uint32_t m_id;

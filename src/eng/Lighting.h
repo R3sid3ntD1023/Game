@@ -17,6 +17,7 @@ namespace eng
 
         void OnAttach() override;
         void SetEnabled(bool enabled);
+        void SetCastShadow(bool cast);
 
         gfx::LightType type;
         glm::vec3 color;
@@ -24,6 +25,7 @@ namespace eng
         float range;
         float innerDegrees;
         float outerDegrees;
+        bool castShadow = false; // set before the component is attached
     };
 
     class PointLightComponent : public LightComponent

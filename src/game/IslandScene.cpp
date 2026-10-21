@@ -1,11 +1,13 @@
 #include "game/IslandScene.h"
 #include "game/Terrain.h"
 #include "game/TreeGen.h"
+#include "gfx/ModelLoader.h"
 #include <algorithm>
 #include <cmath>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <random>
+#include <spdlog/spdlog.h>
 
 namespace game
 {
@@ -18,14 +20,23 @@ namespace game
 		constexpr int kFernVariants = 4;
 		// float treeHeight[kTreeVariants];
 		int /*trunkMesh[kTreeVariants], canopyMesh[kTreeVariants],*/ fernMesh[kFernVariants];
-		int tree = s.AddMesh({"tree", "model", {1.0f}, "models/realistic_tree.glb"});
+		int tree = s.AddMesh({"tree", "model", {1.0f}, "models/realistic_tree.glb", true});
 
 		int medkits[2];
 		medkits[0] = s.AddMesh({"medkit", "model", {0.5f}, "models/medkit.glb"});
 		medkits[1] = s.AddMesh({"firstaid", "model", {0.5f}, "models/firstaid.glb"});
 
 		const int cube = s.AddMesh({"cube", "cube", {0.5f}});
-		const int boulder = s.AddMesh({"boulder", "model", {0.5f}, "models/forest_boulder_wgosajs_low.glb"});
+		const int boulder = s.AddMesh({"boulder", "model", {0.5f}, "models/forest_boulder_wgosajs_low.glb", true});
+		gfx::Bounds boulderBounds{glm::vec3(-0.5f), glm::vec3(0.5f)};
+		try
+		{
+			boulderBounds = gfx::QueryModelBounds(std::string(ASSETS_DIR) + "models/forest_boulder_wgosajs_low.glb", 0.5f);
+		}
+		catch (const std::exception &e)
+		{
+			spdlog::warn("Boulder bounds unavailable, using a unit box: {}", e.what());
+		}
 		const int terrain = s.AddMesh({"terrain", kMeshTerrain, {320.0f}});
 		const int sea = s.AddMesh({"sea", "plane", {900.0f, 1.0f}});
 		const int raptor = s.AddMesh({"raptor", kMeshRaptor, {}});
@@ -36,10 +47,20 @@ namespace game
 		//     //  trunkMesh[v] = s.AddMesh({"trunk", kMeshTreeTrunk, {static_cast<float>(seed)}});
 		//     canopyMesh[v] = s.AddMesh({"canopy", "model", {1.0f}, "models/realistic_tree.glb"});
 		// }
+		// All fern instances share one mesh (and its imported materials).
+		const int fernModel = s.AddMesh({"fern", "model", {1.0f}, "models/fern.glb", true});
 		for (int v = 0; v < kFernVariants; ++v)
-			fernMesh[v] = s.AddMesh({"fern", kMeshFern, {static_cast<float>(200 + v)}});
+			fernMesh[v] = fernModel;
 
 		const int grass = s.AddMaterial({"ground", {0.07f, 0.12f, 0.05f}, 0.0f, 0.95f, {}});
+		s.materials[grass].shader = "Terrain"; // procedural layers (sand, grass, mud, rock)
+		const int grassMat = s.AddMaterial({"grass", {0.07f, 0.2f, 0.04f}, 0.0f, 0.8f, {}});
+		s.materials[grassMat].shader = "Grass";
+		s.materials[grassMat].windStrength = 0.4f;
+		constexpr int kGrassVariants = 3;
+		int grassMesh[kGrassVariants];
+		for (int v = 0; v < kGrassVariants; ++v)
+			grassMesh[v] = s.AddMesh({"grass", kMeshGrass, {static_cast<float>(500 + v)}});
 		const int water = s.AddMaterial({"sea", {0.01f, 0.04f, 0.07f}, 0.0f, 0.05f, {}});
 		// const int bark = s.AddMaterial({"bark", {0.16f, 0.11f, 0.08f}, 0.0f, 0.9f, {}});
 		const int leaves = s.AddMaterial({"leaves", {0.05f, 0.16f, 0.05f}, 0.0f, 0.75f, {}});
@@ -323,13 +344,40 @@ namespace game
 			// t.hasBody = true;
 			// t.bodyStatic = true;
 			// t.halfExtents = {0.7f * scale, H * 0.5f, 0.7f * scale};
-			add("Canopy", pos, glm::vec3(scale), tree, leaves).rotation = rot;
+			add("Canopy", pos, glm::vec3(scale), tree, -1).rotation = rot;
+
+			// Mesh-less static trunk collider so trees block movement and carve the navigation grid.
+			auto &trunk = add("TreeTrunk", pos + glm::vec3(0.0f, 2.5f * scale, 0.0f), glm::vec3(1.0f), -1, -1);
+			trunk.hasBody = true;
+			trunk.bodyStatic = true;
+			trunk.halfExtents = {0.5f * scale, 2.5f * scale, 0.5f * scale};
+		}
+
+		// Grass: tufts scattered in clumps on gentle, dry ground. No colliders, so they never touch the nav grid.
+		for (int c = 0; c < params.grassClumps; ++c)
+		{
+			const glm::vec2 centre = randomLandPoint(1.0f, 4.0f);
+			for (int k = 0; k < 14; ++k)
+			{
+				const float a = U(0.0f, glm::two_pi<float>());
+				const float r = std::sqrt(unit(rng)) * 4.0f;
+				const glm::vec2 p = centre + glm::vec2(std::cos(a), std::sin(a)) * r;
+				const float h = heightSource.Height(p.x, p.y);
+				if (h < 1.0f)
+					continue;
+				// Skip steep ground, which the terrain shader shows as bare rock.
+				const float slope = std::max(std::abs(heightSource.Height(p.x + 0.5f, p.y) - h), std::abs(heightSource.Height(p.x, p.y + 0.5f) - h)) / 0.5f;
+				if (slope > 0.6f)
+					continue;
+				auto &g = add("Grass", {p.x, h - 0.03f, p.y}, glm::vec3(U(0.8f, 1.5f)), grassMesh[(c + k) % kGrassVariants], grassMat);
+				g.rotation = yaw();
+			}
 		}
 
 		for (int i = 0; i < params.ferns; ++i)
 		{
 			const glm::vec2 p = randomLandPoint(0.8f, 6.0f);
-			auto &f = add("Fern", {p.x, heightSource.Height(p.x, p.y) - 0.05f, p.y}, glm::vec3(U(0.8f, 1.8f)), fernMesh[i % kFernVariants], fern);
+			auto &f = add("Fern", {p.x, heightSource.Height(p.x, p.y) - 0.05f, p.y}, glm::vec3(U(0.8f, 1.8f)), fernMesh[i % kFernVariants], -1);
 			f.rotation = yaw();
 		}
 
@@ -337,10 +385,23 @@ namespace game
 		{
 			const glm::vec2 p = randomLandPoint(0.5f, 10.0f);
 			const float sz = U(1.2f, 3.7f);
-			auto &r = add("Rock", {p.x, heightSource.Height(p.x, p.y) + sz * 0.25f, p.y}, {sz, sz * 0.7f, sz}, boulder, rock);
+			const glm::vec3 scale{sz, sz * 0.7f, sz};
+
+			// Sit the model's real bottom on the lowest ground under its footprint, sunk slightly so no gap shows.
+			const glm::vec3 half = boulderBounds.HalfExtents() * scale;
+			const float lowest = std::min(
+				{heightSource.Height(p.x, p.y),
+				 heightSource.Height(p.x - half.x, p.y - half.z),
+				 heightSource.Height(p.x + half.x, p.y - half.z),
+				 heightSource.Height(p.x - half.x, p.y + half.z),
+				 heightSource.Height(p.x + half.x, p.y + half.z)}
+			);
+			const float y = lowest - boulderBounds.min.y * scale.y - half.y * 0.15f;
+
+			auto &r = add("Rock", {p.x, y, p.y}, scale, boulder, -1);
 			r.hasBody = true;
 			r.bodyStatic = true;
-			r.halfExtents = {sz * 0.35f, sz * 0.25f, sz * 0.35f};
+			r.halfExtents = half * 0.85f;
 		}
 
 		// Weapon pickup params: damage, cooldown, magazine, reserve, automatic (0/1), reload time, range.
@@ -400,6 +461,7 @@ namespace game
 		IslandParams p;
 		p.trees = 40;
 		p.ferns = 80;
+		p.grassClumps = 60;
 		p.rocks = 4;
 		p.raptors = 2;
 		p.buildings = 2;

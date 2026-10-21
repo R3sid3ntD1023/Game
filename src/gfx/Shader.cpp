@@ -10,14 +10,30 @@ namespace gfx
     namespace
     {
 
-        std::string ReadFile(const std::string &path)
+        // Supports `#include "file"` (relative to the including file) since GLSL has no include of its own.
+        std::string ReadFile(const std::string &path, int depth = 0)
         {
             std::ifstream f(path, std::ios::binary);
             if (!f)
                 throw std::runtime_error("Cannot open shader file: " + path);
-            std::stringstream ss;
-            ss << f.rdbuf();
-            return ss.str();
+            std::stringstream in;
+            in << f.rdbuf();
+            if (depth > 8)
+                throw std::runtime_error("Shader include nesting too deep: " + path);
+
+            const std::string dir = path.substr(0, path.find_last_of("/\\") + 1);
+            std::string out, line;
+            while (std::getline(in, line))
+            {
+                const size_t p = line.find("#include");
+                const size_t q1 = line.find('"');
+                const size_t q2 = q1 == std::string::npos ? q1 : line.find('"', q1 + 1);
+                if (p != std::string::npos && q2 != std::string::npos)
+                    out += ReadFile(dir + line.substr(q1 + 1, q2 - q1 - 1), depth + 1) + "\n";
+                else
+                    out += line + "\n";
+            }
+            return out;
         }
 
         GLuint Compile(GLenum type, const std::string &path)

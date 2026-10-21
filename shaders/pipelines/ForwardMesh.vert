@@ -1,5 +1,5 @@
-#version 460 core
-
+// Shared vertex stage for forward-shaded meshes. A material's .vert supplies `#version 460 core` and includes this file.
+// Must produce the same gl_Position as depth.vert (same wind), so the shading pass can use GL_LEQUAL.
 layout(location = 0) in vec3 aPosition;
 layout(location = 1) in vec3 aNormal;
 layout(location = 2) in vec2 aUV;
@@ -11,7 +11,8 @@ struct Instance {
     mat4 model;
     uint boneOffset;       // 0xFFFFFFFF = not skinned
     float emissiveScale;   // per-instance emissive multiplier (flickering lamps)
-    uint pad0, pad1;
+    float windStrength;    // per-material foliage sway in metres, 0 = rigid
+    uint pad1;
 };
 
 layout(std430, binding = 0) readonly buffer Instances {
@@ -23,6 +24,8 @@ layout(std430, binding = 1) readonly buffer Bones {
 };
 
 uniform mat4 uViewProj;
+
+#include "../wind.glsl"
 
 invariant gl_Position; // must match depth.vert exactly so the shading pass can use GL_LEQUAL
 
@@ -54,7 +57,7 @@ void main() {
     }
 
     vec4 world = model * localPos;
-
+    world.xyz += WindOffset(world.xyz, localPos.y, inst.windStrength);
     mat3 normalMat = transpose(inverse(mat3(model)));
     vec3 N = normalize(normalMat * localNormal);
     vec3 T = normalize(mat3(model) * localTangent);

@@ -17,6 +17,7 @@ namespace gfx
         Shader &operator=(const Shader &) = delete;
 
         void Bind() const { glUseProgram(m_program); }
+        GLuint Id() const { return m_program; }
 
         void SetInt(const char *name, int v) const { glProgramUniform1i(m_program, Loc(name), v); }
         void SetFloat(const char *name, float v) const { glProgramUniform1f(m_program, Loc(name), v); }

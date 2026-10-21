@@ -32,7 +32,7 @@ namespace gfx
             gpu.push_back({{l.position, l.range},
                            {l.color, static_cast<float>(l.type)},
                            {l.direction, l.innerCos},
-                           {l.outerCos, 0.0f, 0.0f, 0.0f}});
+                           {l.outerCos, l.castShadow ? 1.0f : 0.0f, static_cast<float>(l.shadowSlot + 1), 0.0f}});
         }
         const int lightCount = static_cast<int>(gpu.size());
         if (gpu.empty())

@@ -14,7 +14,7 @@ namespace gfx
     class ForwardPlus
     {
     public:
-        static constexpr int kTileSize = 16; // keep in sync with light_cull.comp / brdf.frag
+        static constexpr int kTileSize = 16; // keep in sync with light_cull.comp / ForwardMesh.frag
         static constexpr int kMaxLightsPerTile = 64;
 
         ForwardPlus();

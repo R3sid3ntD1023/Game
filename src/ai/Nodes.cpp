@@ -75,56 +75,70 @@ namespace ai
 
 	void MoveTo::OnStart(ai::AIContext &ctx)
 	{
-		auto &transform = ctx.self->GetTransform();
-		auto target = ctx.blackboard.Get<glm::vec3>(m_target);
-		auto &world = ctx.self->GetWorld();
-		auto query = world.Query();
-		auto &m_grid = world.NavigationGrid();
-
-		if (!m_path.empty())
-		{
-			m_currentNodeIndex = -1;
-			m_path.clear();
-		}
-
-		if (query && m_path.empty())
-		{
-			eng::PathFinder pathFinder(world.NavigationGrid());
-			auto start = m_grid.WorldToGrid(transform.position);
-			auto end = m_grid.WorldToGrid(target);
-
-			m_path = pathFinder.FindPath(start, end);
-			if (!m_path.empty())
-			{
-				m_currentNodeIndex = 0;
-			}
-
-			for (uint32_t i = 0; i < m_path.size(); ++i)
-			{
-				if (i + 1 >= m_path.size())
-					break;
-
-				auto gridPos = m_path[i];
-				auto nextGridPos = m_path[i + 1];
-				auto worldPos = m_grid.GridToWorld(m_path[i].x, m_path[i].y);
-				auto nextWorldPos = m_grid.GridToWorld(nextGridPos.x, nextGridPos.y);
-				gfx::Line line(worldPos, nextWorldPos, glm::vec3(1, 0, 0));
-				world.Lines().DrawPersistentLine({[line](gfx::LineRenderer &lr) { lr.DrawLine(line); }, 100.f});
-			}
-		}
+		m_path.clear();
+		m_currentNodeIndex = -1;
+		m_sinceLastRepath = 0.0f;
+		m_cooldown = 0.0f;
+		m_stuckTime = 0.0f;
+		m_progressPos = ctx.self->GetTransform().position;
+		Repath(ctx);
 	}
 
 	ai::Node::State MoveTo::OnExecute(ai::AIContext &ctx)
 	{
+		m_sinceLastRepath += ctx.deltaTime;
+		m_cooldown = std::max(0.0f, m_cooldown - ctx.deltaTime);
+
+		if (!ctx.blackboard.IsSet(m_target))
+		{
+			m_path.clear();
+			m_currentNodeIndex = -1;
+			if (auto *body = ctx.self->GetComponent<eng::RigidBody>())
+				body->velocity.x = body->velocity.z = 0.0f;
+			return ai::Node::State::Failure;
+		}
+
 		auto target = ctx.blackboard.Get<glm::vec3>(m_target);
 		auto body = ctx.self->GetComponent<eng::RigidBody>();
 		auto &transform = ctx.self->GetTransform();
 		auto &world = ctx.self->GetWorld();
-
 		auto &grid = world.NavigationGrid();
+
+		// Give up when wedged against geometry (e.g. a tree corner) so the tree can pick a new goal.
+		m_stuckTime += ctx.deltaTime;
+		if (glm::distance(transform.position, m_progressPos) > 0.5f)
+		{
+			m_progressPos = transform.position;
+			m_stuckTime = 0.0f;
+		}
+		else if (m_stuckTime > 2.0f)
+		{
+			body->velocity.x = body->velocity.z = 0.0f;
+			ctx.blackboard.Clear(m_target);
+			m_path.clear();
+			m_currentNodeIndex = -1;
+			return ai::Node::State::Failure;
+		}
+
+		bool targetMoved = glm::distance(target, m_targetPosition) > m_repathTargetDistance;
+		bool stale = m_sinceLastRepath > m_repathInterval;
+
+		// Only repath for a moved target; periodic repaths of a static target just burn CPU.
+		if (m_cooldown <= 0.0f && (m_path.empty() || (stale && targetMoved)))
+		{
+			if (!Repath(ctx) && m_path.empty())
+				return ai::Node::State::Failure;
+		}
 
 		glm::vec3 moveTarget = target;
 		float waypointRadius = 0.5f; // Example radius for the waypoint
+
+		for (size_t i = std::max(m_currentNodeIndex, 0); i + 1 < m_path.size(); ++i)
+		{
+			const auto a = grid.GetCell(m_path[i].x, m_path[i].y).position;
+			const auto b = grid.GetCell(m_path[i + 1].x, m_path[i + 1].y).position;
+			world.Lines().QueueLine({a, b, glm::vec3(1.0f, 0.5f, 0.0f)});
+		}
 
 		if (m_currentNodeIndex >= 0)
 		{
@@ -162,16 +176,26 @@ namespace ai
 			distance = glm::length(dir);
 		}
 
+		if (distance < 1e-4f)
+			return ai::Node::State::Running;
+
 		dir /= distance;
 
 		glm::vec3 nextPosition = ctx.self->GetTransform().position + dir * m_speed;
+		auto gridPos = grid.WorldToGrid(nextPosition);
 
-		if (!world.IsWalkable(nextPosition.x, nextPosition.z))
+		if (!grid.IsWalkable(gridPos.x, gridPos.y))
 		{
-			body->velocity.x = 0.0f;
-			body->velocity.z = 0.0f;
-			spdlog::info("Blocked");
+			body->velocity.x = body->velocity.z = 0.0f;
+
+			if (m_cooldown <= 0.0f && Repath(ctx))
+			{
+				return ai::Node::State::Running;
+			}
+
 			ctx.blackboard.Clear(m_target);
+			m_path.clear();
+			m_currentNodeIndex = -1;
 			return ai::Node::State::Failure;
 		}
 
@@ -181,6 +205,32 @@ namespace ai
 		transform.rotation = glm::angleAxis(std::atan2(-dir.z, dir.x), glm::vec3(0, 1, 0));
 
 		return ai::Node::State::Running;
+	}
+
+	bool MoveTo::Repath(ai::AIContext &ctx)
+	{
+		auto &world = ctx.self->GetWorld();
+		auto &grid = world.NavigationGrid();
+		if (!ctx.blackboard.IsSet(m_target))
+			return false;
+
+		auto target = ctx.blackboard.Get<glm::vec3>(m_target);
+
+		eng::PathFinder pf(grid);
+		auto path = pf.FindPath(grid.WorldToGrid(ctx.self->GetTransform().position), grid.WorldToGrid(target));
+
+		m_sinceLastRepath = 0.0f;
+		m_targetPosition = target;
+		if (path.empty())
+		{
+			m_cooldown = m_failCooldown;
+			return false;
+		}
+
+		m_path = std::move(path);
+		m_currentNodeIndex = 0;
+		m_cooldown = m_repathInterval; // successful repaths are rate-limited too, otherwise a blocked step repaths every frame
+		return true;
 	}
 
 	ai::Node::State FindRandomReachablePoint::OnExecute(ai::AIContext &ctx)

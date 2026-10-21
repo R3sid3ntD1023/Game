@@ -1,35 +1,44 @@
 #include "PathFinder.h"
 #include <algorithm>
+#include <queue>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace eng
 {
 	PathFinder::Path PathFinder::FindPath(const glm::ivec2 &start, const glm::ivec2 &end)
 	{
-		std::deque<Node> allNodes;
-		std::vector<Node *> open;
+		if (!grid.IsWalkable(start.x, start.y) || !grid.IsWalkable(end.x, end.y))
+			return Path();
+
+		// Unreachable goals would otherwise exhaust the whole search budget every call.
+		if (!grid.Connected(start.x, start.y, end.x, end.y))
+			return Path();
+
+		// node storage is pointer-stable; each cell has at most one node
+		std::unordered_map<int, Node> allNodes;
+		using QueueEntry = std::pair<float, Node *>;
+		auto cmp = [](const QueueEntry &a, const QueueEntry &b) { return a.first > b.first; };
+		std::priority_queue<QueueEntry, std::vector<QueueEntry>, decltype(cmp)> open(cmp);
 		std::unordered_set<int> closed;
 
-		allNodes.emplace_back();
-
-		Node *startNode = &allNodes.back();
+		Node *startNode = &allNodes[ToId(Node{start})];
 		startNode->gridPos = start;
+		startNode->hCost = Heuristic(*startNode, end);
+		open.emplace(startNode->fCost(), startNode);
 
-		open.push_back(startNode);
+		// Bounds worst-case cost (e.g. unreachable target) on a large grid to avoid frame spikes.
+		constexpr size_t kMaxExpansions = 60000;
 
-		while (!open.empty())
+		while (!open.empty() && closed.size() < kMaxExpansions)
 		{
+			auto [queuedCost, currentNode] = open.top();
+			open.pop();
 
-			size_t bestIndex = 0;
-			for (size_t i = 1; i < open.size(); ++i)
-			{
-				if (open[i]->fCost() < open[bestIndex]->fCost())
-					bestIndex = i;
-			}
+			// skip stale queue entries
+			if (closed.contains(ToId(*currentNode)))
+				continue;
 
-			auto currentNode = open[bestIndex];
-
-			open.erase(open.begin() + bestIndex);
 			closed.insert(ToId(*currentNode));
 
 			if (currentNode->gridPos == end)
@@ -43,17 +52,13 @@ namespace eng
 				if (closed.contains(ToId(neighborData)))
 					continue;
 
-				auto existing = FindOpenNode(neighborData.gridPos, open);
-				if (existing)
-					continue;
-
 				glm::ivec2 delta = neighborData.gridPos - currentNode->gridPos;
 				bool isDiagonal = delta.x != 0 && delta.y != 0;
-				float moveCost = isDiagonal ? 1.4142f : 1.0f;
-				float newGCost = currentNode->gCost + moveCost;
-				// add slope cost
+
 				NavCell &cell = grid.GetCell(neighborData.gridPos.x, neighborData.gridPos.y);
+				float moveCost = isDiagonal ? 1.4142f : 1.0f;
 				moveCost += cell.slope * 5.0f;
+				float newGCost = currentNode->gCost + moveCost;
 
 				// prevent diagonal cutting through corners
 				if (isDiagonal)
@@ -64,21 +69,23 @@ namespace eng
 						continue;
 				}
 
-				if (!existing)
+				int id = ToId(neighborData);
+				auto it = allNodes.find(id);
+				if (it == allNodes.end())
 				{
-					allNodes.emplace_back(neighborData);
-
-					Node *neighbor = &allNodes.back();
+					Node *neighbor = &allNodes.emplace(id, neighborData).first->second;
 					neighbor->gCost = newGCost;
 					neighbor->hCost = Heuristic(neighborData, end);
 					neighbor->parent = currentNode;
 
-					open.push_back(&allNodes.back());
+					open.emplace(neighbor->fCost(), neighbor);
 				}
-				else if (existing && newGCost < existing->gCost)
+				else if (newGCost < it->second.gCost)
 				{
+					Node *existing = &it->second;
 					existing->gCost = newGCost;
 					existing->parent = currentNode;
+					open.emplace(existing->fCost(), existing);
 				}
 			}
 		}
@@ -145,7 +152,10 @@ namespace eng
 
 	float PathFinder::Heuristic(const Node &node, const glm::ivec2 &end) const
 	{
-		return glm::distance(glm::vec2(node.gridPos.x, node.gridPos.y), glm::vec2(end.x, end.y));
+		// Octile distance matches the 8-way movement costs and expands far fewer nodes than Euclidean.
+		float dx = float(std::abs(node.gridPos.x - end.x));
+		float dy = float(std::abs(node.gridPos.y - end.y));
+		return (dx + dy) + (1.4142f - 2.0f) * std::min(dx, dy);
 	}
 
 	bool PathFinder::HasLineOfSight(const glm::ivec2 &start, const glm::ivec2 &end) const
