@@ -1,6 +1,7 @@
 #pragma once
 
 #include "eng/IWorldQuery.h"
+#include "eng/Scene.h"
 #include "gfx/Mesh.h"
 #include "gfx/Texture.h"
 #include <memory>
@@ -20,9 +21,13 @@ namespace game
 	struct HeightMapSource : IHeightSource
 	{
 		gfx::DecodedTexture source;
+		float scale = 20.0f; // metres at full white (and below sea level at black)
 
 		float Height(float x, float z) const override;
 	};
+
+	// Builds the height source a world's TerrainDesc describes (procedural hills when no usable height map is set).
+	std::unique_ptr<IHeightSource> MakeHeightSource(const eng::TerrainDesc &desc);
 
 	struct Terrain : eng::IWorldQuery
 	{

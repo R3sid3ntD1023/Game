@@ -1,4 +1,5 @@
 #include "eng/SceneLoader.h"
+#include "eng/AssetMeta.h"
 #include "eng/BuiltinComponents.h"
 #include "eng/RigidBody.h"
 #include "eng/World.h"
@@ -26,7 +27,7 @@ namespace eng
 		RegisterMesh("cube", [](const MeshDesc &d) { return gfx::primitives::Cube(Param(d.params, 0, 0.5f)); });
 		RegisterMesh("sphere", [](const MeshDesc &d) { return gfx::primitives::Sphere(Param(d.params, 0, 0.5f)); });
 		RegisterMesh("plane", [](const MeshDesc &d) { return gfx::primitives::Plane(Param(d.params, 0, 1.0f), Param(d.params, 1, 1.0f)); });
-		RegisterMesh("model", [](const MeshDesc &d) { return gfx::LoadModel(std::string(ASSETS_DIR) + d.path, Param(d.params, 0, 1.0f)); });
+		RegisterMesh("model", [](const MeshDesc &d) { return gfx::LoadModel(ResolveAssetPath(d.path), Param(d.params, 0, 1.0f)); });
 	}
 
 	void SceneLoader::Instantiate(World &world, const SceneData &scene) const
@@ -38,7 +39,7 @@ namespace eng
 				return nullptr;
 			auto &slot = textures[rel + (srgb ? "#srgb" : "#linear")];
 			if (!slot)
-				slot = gfx::Texture::FromFile(std::string(ASSETS_DIR) + rel, srgb);
+				slot = gfx::Texture::FromFile(ResolveAssetPath(rel), srgb);
 			return slot;
 		};
 		auto loadSource = [&](const gfx::TextureSource &src, bool srgb) -> std::shared_ptr<gfx::Texture>
@@ -67,7 +68,7 @@ namespace eng
 
 			if (d.kind == "model" && d.importMaterials)
 			{
-				gfx::ModelAsset asset = gfx::LoadModelAsset(std::string(ASSETS_DIR) + d.path, Param(d.params, 0, 1.0f));
+				gfx::ModelAsset asset = gfx::LoadModelAsset(ResolveAssetPath(d.path), Param(d.params, 0, 1.0f));
 				std::vector<std::shared_ptr<gfx::Material>> imported;
 				for (const gfx::ModelMaterial &mm : asset.materials)
 				{

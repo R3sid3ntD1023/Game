@@ -26,16 +26,28 @@ find_package(EnTT CONFIG REQUIRED)
 find_package(cereal CONFIG REQUIRED)
 find_package(OpenAL CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
+find_package(imguizmo CONFIG REQUIRED)
 find_path(STB_INCLUDE_DIRS "stb_image.h")
 
-file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/*.cpp)
-file(GLOB_RECURSE GAME_HEADERS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/*.h)
+set(SRC ${CMAKE_SOURCE_DIR}/src)
 
-add_executable(Game ${GAME_SOURCES} ${GAME_HEADERS})
+# Engine: everything that is not game-specific or editor-specific.
+file(GLOB_RECURSE ENG_SOURCES CONFIGURE_DEPENDS
+    ${SRC}/ai/*.cpp ${SRC}/audio/*.cpp ${SRC}/core/*.cpp ${SRC}/ecs/*.cpp
+    ${SRC}/eng/*.cpp ${SRC}/gfx/*.cpp ${SRC}/ui/*.cpp ${SRC}/pch.cpp)
+file(GLOB_RECURSE ENG_HEADERS CONFIGURE_DEPENDS
+    ${SRC}/ai/*.h ${SRC}/audio/*.h ${SRC}/core/*.h ${SRC}/ecs/*.h
+    ${SRC}/eng/*.h ${SRC}/gfx/*.h ${SRC}/ui/*.h ${SRC}/pch.h)
+file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS ${SRC}/game/*.cpp)
+file(GLOB_RECURSE GAME_HEADERS CONFIGURE_DEPENDS ${SRC}/game/*.h)
+file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS ${SRC}/editor/*.cpp)
+file(GLOB_RECURSE EDITOR_HEADERS CONFIGURE_DEPENDS ${SRC}/editor/*.h)
 
-target_include_directories(Game PRIVATE src ${STB_INCLUDE_DIRS})
-target_precompile_headers(Game PRIVATE ${CMAKE_SOURCE_DIR}/src/pch.h)
-target_compile_definitions(Game PRIVATE
+add_library(eng STATIC ${ENG_SOURCES} ${ENG_HEADERS})
+target_include_directories(eng PUBLIC ${SRC} ${STB_INCLUDE_DIRS})
+target_precompile_headers(eng PRIVATE ${SRC}/pch.h)
+target_compile_definitions(eng PUBLIC
     SHADER_DIR="${CMAKE_SOURCE_DIR}/shaders/"
     ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets/"
     # Readable JSON worlds while developing, compact binary worlds in Release.
@@ -43,7 +55,7 @@ target_compile_definitions(Game PRIVATE
     $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:_DEVELOPMENT=1>
     $<$<CONFIG:Debug>:GAME_DEBUG=1>
 )
-target_link_libraries(Game PRIVATE
+target_link_libraries(eng PUBLIC
     glad::glad
     glfw
     glm::glm
@@ -54,31 +66,49 @@ target_link_libraries(Game PRIVATE
     assimp::assimp
 )
 
-set_target_properties(Game PROPERTIES
-    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/bin/Debug"
-    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/bin/Release"
-    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/bin/RelWithDebInfo"
-)
+add_executable(Game ${SRC}/main.cpp ${GAME_SOURCES} ${GAME_HEADERS})
+target_link_libraries(Game PRIVATE eng)
+target_precompile_headers(Game REUSE_FROM eng)
+
+# The editor reuses the game's content (generators, AI, scripts) to preview scenes and to play/simulate them.
+set(EDITOR_GAME_SOURCES ${GAME_SOURCES})
+list(FILTER EDITOR_GAME_SOURCES EXCLUDE REGEX "/game/(Game|MenuScreens)\\.cpp$")
+add_executable(Editor ${EDITOR_SOURCES} ${EDITOR_HEADERS} ${EDITOR_GAME_SOURCES})
+target_link_libraries(Editor PRIVATE eng imgui::imgui imguizmo::imguizmo)
+if(WIN32)
+  target_link_libraries(Editor PRIVATE comdlg32)
+endif()
+target_precompile_headers(Editor REUSE_FROM eng)
+
+foreach(tgt Game Editor)
+    set_target_properties(${tgt} PROPERTIES
+        VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/bin/Debug"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/bin/Release"
+        RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/bin/RelWithDebInfo"
+    )
+endforeach()
 if(MSVC)
     set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Game)
 endif()
 
-if(MSVC)
-    target_compile_options(Game PRIVATE /W4 /permissive- /utf-8)
-    if(GAME_WARNINGS_AS_ERRORS)
-        target_compile_options(Game PRIVATE /WX)
+foreach(tgt eng Game Editor)
+    if(MSVC)
+        target_compile_options(${tgt} PRIVATE /W4 /permissive- /utf-8)
+        if(GAME_WARNINGS_AS_ERRORS)
+            target_compile_options(${tgt} PRIVATE /WX)
+        endif()
+        if(GAME_ENABLE_SANITIZERS)
+            target_compile_options(${tgt} PRIVATE /fsanitize=address)
+        endif()
+    else()
+        target_compile_options(${tgt} PRIVATE -Wall -Wextra)
+        if(GAME_WARNINGS_AS_ERRORS)
+            target_compile_options(${tgt} PRIVATE -Werror)
+        endif()
+        if(GAME_ENABLE_SANITIZERS)
+            target_compile_options(${tgt} PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+            target_link_options(${tgt} PRIVATE -fsanitize=address)
+        endif()
     endif()
-    if(GAME_ENABLE_SANITIZERS)
-        target_compile_options(Game PRIVATE /fsanitize=address)
-    endif()
-else()
-    target_compile_options(Game PRIVATE -Wall -Wextra)
-    if(GAME_WARNINGS_AS_ERRORS)
-        target_compile_options(Game PRIVATE -Werror)
-    endif()
-    if(GAME_ENABLE_SANITIZERS)
-        target_compile_options(Game PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-        target_link_options(Game PRIVATE -fsanitize=address)
-    endif()
-endif()
+endforeach()

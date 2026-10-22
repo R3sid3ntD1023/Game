@@ -45,10 +45,12 @@ namespace game
 		std::unique_ptr<audio::AudioEngine> m_audio; // declared before m_world so sources are released first
 		std::unique_ptr<eng::World> m_world;		 // only exists while a world is loaded
 		std::shared_ptr<gfx::EnvironmentMap> m_environment;
+		std::string m_environmentPath;
 		GameState m_state;
 		eng::GameObject *m_player = nullptr;
 		core::IInputReceiver *m_receiver = nullptr; // player's script component
 		std::unique_ptr<Hud> m_hud;
+		ui::Widget *m_sceneUi = nullptr; // widgets of the world's UI layout (owned by the canvas)
 		std::unique_ptr<MenuScreens> m_menus;
 		Screen m_screen = Screen::Menu;
 		Terrain m_terrain;

@@ -1,4 +1,6 @@
 #include "game/Terrain.h"
+#include "eng/AssetMeta.h"
+#include <spdlog/spdlog.h>
 #include <algorithm>
 #include <cmath>
 
@@ -8,8 +10,27 @@ namespace game
 	static constexpr float kTerrainSize = Terrain::kIslandRadius;
 	static constexpr float kWalkRadius = Terrain::kWalkRadius;
 	static constexpr float kSeaLevel = Terrain::kSeaLevel;
-	static constexpr float kHeightMapScale = 20.f;
 	static constexpr float kMaxSlope = 75.0f;
+
+	std::unique_ptr<IHeightSource> MakeHeightSource(const eng::TerrainDesc &desc)
+	{
+		if (!desc.heightMap.empty())
+		{
+			try
+			{
+				auto source = std::make_unique<HeightMapSource>();
+				source->source = gfx::Texture::FromFileToBytes(eng::ResolveAssetPath(desc.heightMap));
+				source->scale = desc.heightScale;
+				if (source->source.width > 0 && source->source.height > 0)
+					return source;
+			}
+			catch (const std::exception &e)
+			{
+				spdlog::warn("Height map '{}' unavailable ({}); using procedural terrain", desc.heightMap, e.what());
+			}
+		}
+		return std::make_unique<ProceduralHeightSource>();
+	}
 
 	float ProceduralHeightSource::Height(float x, float z) const
 	{
@@ -38,7 +59,7 @@ namespace game
 
 		const int index = (iz * source.width + ix) * source.channels;
 		float pixel = (static_cast<float>(source.data[index])) / 255.0f;
-		return (pixel - 0.5f) * 2.0f * kHeightMapScale;
+		return (pixel - 0.5f) * 2.0f * scale;
 	}
 
 	float Terrain::Slope(float x, float z) const

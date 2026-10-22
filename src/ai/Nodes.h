@@ -32,19 +32,19 @@ namespace ai
 	public:
 		virtual ~CompositeNode() = default;
 
-		void AddChild(Node *child) { children.push_back(child); }
+		void AddChild(Node *child) { m_children.push_back(child); }
 
-		std::vector<Node *> &GetChildren() { return children; }
+		std::vector<Node *> &GetChildren() { return m_children; }
 
 		void Abort() override
 		{
 			Node::Abort();
-			for (Node *child : children)
+			for (Node *child : m_children)
 				child->Abort();
 		}
 
 	private:
-		std::vector<Node *> children;
+		std::vector<Node *> m_children;
 	};
 
 	class Root : public Decorator
@@ -126,10 +126,10 @@ namespace ai
 	{
 	public:
 		EnvQuery query;
-		std::string m_locationKey;			// glm::vec3
-		std::string m_dataKey;				// void*, optional
-		bool m_skipIfSet = false;			// keep a previous result instead of querying again
-		float m_failCooldown = 0.0f;		// after a failed query, fail fast for this many seconds instead of re-running it
+		std::string m_locationKey;	 // glm::vec3
+		std::string m_dataKey;		 // void*, optional
+		bool m_skipIfSet = false;	 // keep a previous result instead of querying again
+		float m_failCooldown = 0.0f; // after a failed query, fail fast for this many seconds instead of re-running it
 
 		Node::State OnExecute(AIContext &ctx) override;
 

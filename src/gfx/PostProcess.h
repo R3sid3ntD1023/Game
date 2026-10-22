@@ -16,6 +16,7 @@ public:
     void EndScene(int screenWidth, int screenHeight);
     GLuint DepthTexture() const { return m_scene.DepthTexture(); } // scene depth, valid after the depth prepass
 
+    GLuint outputFbo = 0; // composite target; 0 = the screen
     bool bloomEnabled = true;
     bool showRaw = false; // blit the HDR buffer directly, no tone mapping
     float threshold = 1.5f;

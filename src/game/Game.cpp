@@ -1,5 +1,7 @@
 #include <glad/glad.h>
 
+#include <filesystem>
+
 #include "eng/Animator.h"
 #include "eng/AudioSource.h"
 #include "eng/BuiltinComponents.h"
@@ -14,6 +16,7 @@
 #include "game/EscapeZone.h"
 #include "game/FirstPersonController.h"
 #include "game/Game.h"
+#include "game/GameContent.h"
 #include "game/HerbivoreAI.h"
 #include "game/HerbivoreModel.h"
 #include "game/Plant.h"
@@ -25,6 +28,7 @@
 #include "game/TreeGen.h"
 #include "game/Weapon.h"
 #include "gfx/ModelLoader.h"
+#include "ui/UiLayout.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <filesystem>
@@ -61,9 +65,7 @@ namespace game
 
 		m_menus = std::make_unique<MenuScreens>(m_canvas.Root(), std::move(callbacks), m_post);
 
-		auto heightSource = std::make_unique<HeightMapSource>();
-		heightSource->source = gfx::Texture::FromFileToBytes(std::string(ASSETS_DIR) + "textures/hawaii_height_map.png");
-		m_terrain.SetHeightSource(std::move(heightSource));
+		m_terrain.SetHeightSource(MakeHeightSource(eng::TerrainDesc{}));
 
 		SetScreen(Screen::Menu);
 		if (!startWorld.empty())
@@ -84,6 +86,8 @@ namespace game
 		m_audio->SetMasterVolume(screen == Screen::Playing ? masterVolume : masterVolume * 0.1f);
 		m_menus->ShowPause(screen == Screen::Paused);
 		m_hud->SetVisible(screen != Screen::Menu && m_world != nullptr);
+		if (m_sceneUi)
+			m_sceneUi->visible = screen == Screen::Playing || screen == Screen::Paused;
 	}
 
 	void Game::ReturnToMenu()
@@ -150,205 +154,50 @@ namespace game
 			eng::SaveScene(path, scene);
 			spdlog::info("Generated world '{}' -> {}", worldName, path);
 		}
+		m_terrain.SetHeightSource(MakeHeightSource(scene.terrain));
 
 		auto shaders = std::make_shared<gfx::ShaderLibrary>(SHADER_DIR "materials/");
 		eng::SceneLoader loader(shaders);
 
-		loader.RegisterMesh(kMeshTerrain, [this](const eng::MeshDesc &d) { return m_terrain.BuildMesh(static_cast<int>(Param(d.params, 0, 160.0f))); }, false);
-		// assets/models/raptor.* (rigged, faces +X, origin at the hit-box center) replaces the procedural raptor.
-		std::shared_ptr<gfx::SkinnedModel> raptorModel;
-		std::shared_ptr<const gfx::Skeleton> raptorSkeleton;
-		std::shared_ptr<const std::vector<gfx::AnimationClip>> raptorClips;
-		if (const std::string external = gfx::FindModelOverride("raptor"); !external.empty())
+		GameContent content;
+		content.world = m_world.get();
+		content.state = &m_state;
+		content.terrain = &m_terrain;
+		RegisterGameContent(loader, content);
+
+		const eng::EnvironmentDesc &env = scene.environment;
+		const std::string skyPath = env.skyHdr.empty() ? std::string() : (std::filesystem::path(ASSETS_DIR) / env.skyHdr).string();
+		if (!m_environment || skyPath != m_environmentPath)
 		{
-			try
-			{
-				raptorModel = std::make_shared<gfx::SkinnedModel>(gfx::LoadSkinnedModel(external));
-				raptorSkeleton = std::shared_ptr<const gfx::Skeleton>(raptorModel, &raptorModel->skeleton);
-				raptorClips = std::make_shared<const std::vector<gfx::AnimationClip>>(raptorModel->clips);
-				spdlog::info("Raptor model loaded from {}", external);
-			}
-			catch (const std::exception &e)
-			{
-				spdlog::warn("Raptor model override ignored: {}", e.what());
-				raptorModel.reset();
-			}
+			m_environment = std::make_shared<gfx::EnvironmentMap>(skyPath); // empty path = procedural sky
+			m_environmentPath = skyPath;
 		}
-		loader.RegisterMesh(kMeshRaptor, [raptorModel](const eng::MeshDesc &) { return raptorModel ? raptorModel->mesh : RaptorMesh(); }, false);
-		loader.RegisterMesh(kMeshTriceratops, [](const eng::MeshDesc &) { return HerbivoreMesh(HerbivoreSpecies::Triceratops); }, false);
-		loader.RegisterMesh(kMeshProtoceratops, [](const eng::MeshDesc &) { return HerbivoreMesh(HerbivoreSpecies::Protoceratops); }, false);
-		loader.RegisterMesh(kMeshTreeTrunk, [](const eng::MeshDesc &d) { return GenerateRainforestTree(static_cast<uint32_t>(Param(d.params, 0, 100.0f))).trunk; });
-		loader.RegisterMesh(kMeshTreeCanopy, [](const eng::MeshDesc &d) { return GenerateRainforestTree(static_cast<uint32_t>(Param(d.params, 0, 100.0f))).canopy; });
-		loader.RegisterMesh(kMeshFern, [](const eng::MeshDesc &d) { return GenerateFern(static_cast<uint32_t>(Param(d.params, 0, 200.0f))); });
-		loader.RegisterMesh(kMeshGrass, [](const eng::MeshDesc &d) { return GenerateGrassTuft(static_cast<uint32_t>(Param(d.params, 0, 500.0f))); });
-
-		loader.RegisterScript(
-			kScriptPlayer,
-			[this](eng::GameObject &go, const std::vector<float> &p)
-			{
-				go.AddComponent<WeaponComponent>();
-
-				auto &scripts = go.AddComponent<eng::ScriptComponent>();
-				auto &fps = scripts.Add<FirstPersonController>();
-				fps.SetLook(Param(p, 0, 0.0f), Param(p, 1, 0.0f));
-				scripts.Add<InteractionScript>(m_state);
-				m_receiver = &scripts;
-				m_player = &go;
-				m_firstPersonController = &fps;
-
-				// The flashlight is a spot light entity that follows the camera; F toggles it.
-				auto &flashlight = m_world->CreateGameObject("Flashlight");
-				flashlight.AddComponent<eng::SpotLightComponent>(glm::vec3(1.0f, 0.95f, 0.85f), 220.0f, 50.0f, 11.0f, 21.0f).SetCastShadow(true);
-				flashlight.AddComponent<eng::CameraFollower>(glm::vec3(0.15f, -0.12f, 0.3f));
-			}
-		);
-
-		loader.RegisterScript(
-			kScriptDinosaur,
-			[this, raptorModel, raptorSkeleton, raptorClips](eng::GameObject &go, const std::vector<float> &p)
-			{
-				eng::GameObject *player = m_world->Find("Player");
-				if (!player)
-					throw std::runtime_error("Raptor needs a Player object");
-				if (raptorModel)
-				{
-					auto &animator = go.AddComponent<eng::Animator>(raptorSkeleton, raptorClips);
-					if (!raptorModel->clips.empty())
-						animator.Play(raptorModel->clips.front().name);
-				}
-				else
-					go.AddComponent<eng::Animator>(RaptorSkeleton()).hook = RaptorPose;
-				go.AddComponent<eng::ScriptComponent>().Add<DinosaurAI>(*player, m_state, Param(p, 0, 8.0f), Param(p, 1, 12.0f), Param(p, 2, 0.0f) > 0.5f);
-			}
-		);
-
-		loader.RegisterScript(
-			kScriptCarnivore,
-			[this, raptorModel, raptorSkeleton, raptorClips](eng::GameObject &go, const std::vector<float> &p)
-			{
-				eng::GameObject *player = m_world->Find("Player");
-				if (!player)
-					throw std::runtime_error("T-Rex needs a Player object");
-				if (raptorModel)
-				{
-					auto &animator = go.AddComponent<eng::Animator>(raptorSkeleton, raptorClips);
-					if (!raptorModel->clips.empty())
-						animator.Play(raptorModel->clips.front().name);
-				}
-				else
-					go.AddComponent<eng::Animator>(RaptorSkeleton()).hook = RaptorPose;
-				go.AddComponent<eng::ScriptComponent>().Add<CarnivoreAI>(*player, m_state, Param(p, 0, 7.5f), Param(p, 1, 35.0f));
-			}
-		);
-
-		loader.RegisterScript(
-			kScriptHerbivore,
-			[this](eng::GameObject &go, const std::vector<float> &p)
-			{
-				eng::GameObject *player = m_world->Find("Player");
-				if (!player)
-					throw std::runtime_error("Herbivore needs a Player object");
-				const auto species = Param(p, 0, 0.0f) < 0.5f ? HerbivoreSpecies::Triceratops : HerbivoreSpecies::Protoceratops;
-				go.AddComponent<eng::Animator>(HerbivoreSkeleton(species)).hook = HerbivorePose;
-				go.AddComponent<eng::ScriptComponent>().Add<HerbivoreAI>(species, *player, m_state, Param(p, 1, 6.0f));
-			}
-		);
-
-		loader.RegisterScript(
-			kScriptPlant,
-			[this](eng::GameObject &go, const std::vector<float> &p) { go.AddComponent<Plant>(m_state.ecology, static_cast<int>(Param(p, 0, 3.0f)), Param(p, 1, 60.0f)); }
-		);
-
-		loader.RegisterScript(
-			kScriptEscape,
-			[this](eng::GameObject &go, const std::vector<float> &p)
-			{
-				eng::GameObject *player = m_world->Find("Player");
-				if (!player)
-					throw std::runtime_error("Escape zone needs a Player object");
-				go.AddComponent<eng::ScriptComponent>().Add<EscapeZone>(*player, m_state, Param(p, 0, 6.0f));
-			}
-		);
-
-		loader.RegisterScript(kScriptHealthPickup, [](eng::GameObject &go, const std::vector<float> &p) { go.AddComponent<HealthPickup>(Param(p, 0, 35.0f)); });
-
-		loader.RegisterScript(
-			kScriptWeaponPickup,
-			[](eng::GameObject &go, const std::vector<float> &p)
-			{
-				WeaponStats s;
-				s.name = go.name;
-				s.damage = Param(p, 0, s.damage);
-				s.cooldown = Param(p, 1, s.cooldown);
-				s.magSize = static_cast<int>(Param(p, 2, static_cast<float>(s.magSize)));
-				s.reserve = static_cast<int>(Param(p, 3, static_cast<float>(s.reserve)));
-				s.automatic = Param(p, 4, 0.0f) > 0.5f;
-				s.reloadTime = Param(p, 5, s.reloadTime);
-				s.range = Param(p, 6, s.range);
-				go.AddComponent<WeaponPickup>(s);
-			}
-		);
-
-		loader.RegisterScript(
-			kScriptDoor,
-			[](eng::GameObject &go, const std::vector<float> &p)
-			{ go.AddComponent<Door>(go.name, glm::vec3(Param(p, 0, 0.0f), Param(p, 1, 0.0f), Param(p, 2, 0.0f)), Param(p, 3, 1.5f)); }
-		);
-
-		loader.RegisterScript(
-			kScriptLightPost,
-			[](eng::GameObject &go, const std::vector<float> &p)
-			{
-				go.AddComponent<eng::PointLightComponent>(glm::vec3(Param(p, 4, 1.0f), Param(p, 5, 0.7f), Param(p, 6, 0.4f)), Param(p, 0, 120.0f), Param(p, 1, 28.0f)).SetCastShadow(false);
-				go.AddComponent<eng::LightFlicker>(Param(p, 2, 0.5f), static_cast<uint32_t>(Param(p, 3, 1.0f)));
-			}
-		);
-
-		// params: type (0 point, 1 spot, 2 directional), r, g, b, intensity, range, inner degrees, outer degrees
-		loader.RegisterScript(
-			kScriptLight,
-			[](eng::GameObject &go, const std::vector<float> &p)
-			{
-				go.AddComponent<eng::LightComponent>(
-					static_cast<gfx::LightType>(static_cast<int>(Param(p, 0, 0.0f))),
-					glm::vec3(Param(p, 1, 1.0f), Param(p, 2, 1.0f), Param(p, 3, 1.0f)),
-					Param(p, 4, 10.0f),
-					Param(p, 5, 20.0f),
-					Param(p, 6, 12.0f),
-					Param(p, 7, 22.0f)
-				);
-			}
-		);
-
-		// params: amount (0..1), wind x, wind z
-		loader.RegisterScript(
-			kScriptRain,
-			[](eng::GameObject &go, const std::vector<float> &p)
-			{
-				auto &rain = go.AddComponent<eng::ParticleSystemComponent>();
-				eng::ConfigureRain(rain, Param(p, 0, 1.0f), glm::vec3(Param(p, 1, 2.5f), 0.0f, Param(p, 2, 1.0f)));
-				go.AddComponent<eng::AudioSource>("rain_loop", true, 0.55f, false);
-			}
-		);
-
-		// params: volume
-		loader.RegisterScript(
-			kScriptWind, [](eng::GameObject &go, const std::vector<float> &p) { go.AddComponent<eng::AudioSource>("wind_loop", true, Param(p, 0, 0.4f), false); }
-		);
-
-		// params: rounds
-		loader.RegisterScript(kScriptAmmoCrate, [](eng::GameObject &go, const std::vector<float> &p) { go.AddComponent<AmmoCrate>(static_cast<int>(Param(p, 0, 24.0f))); });
-
-		if (!m_environment)
-			m_environment = std::make_shared<gfx::EnvironmentMap>(""); // empty path = procedural night sky
-		m_world->environment = m_environment;
-		m_world->Physics().SetHeightField([this](float x, float z) { return m_terrain.Height(x, z); });
-		m_world->Physics().SetBoundsRadius(Terrain::kWalkRadius);
+		ConfigureWorld(*m_world, scene, m_environment, m_terrain);
 
 		loader.Instantiate(*m_world, scene);
+		m_player = content.player;
+		m_receiver = content.receiver;
+		m_firstPersonController = content.firstPerson;
 		if (!m_player)
 			throw std::runtime_error("World '" + worldName + "' has no player object");
 
+		if (m_sceneUi)
+			m_sceneUi->visible = false;
+		m_sceneUi = nullptr;
+		if (!scene.ui.empty())
+		{
+			try
+			{
+				const ui::UiLayout layout = ui::LoadUiLayout(std::string(ASSETS_DIR) + "ui/" + scene.ui + ui::kUiLayoutExtension);
+				m_sceneUi = &m_canvas.Root().Add<ui::Widget>();
+				m_sceneUi->Stretch();
+				ui::BuildWidgets(*m_sceneUi, layout);
+			}
+			catch (const std::exception &e)
+			{
+				spdlog::warn("UI layout '{}' not loaded: {}", scene.ui, e.what());
+			}
+		}
 		spdlog::info("World '{}' ready: {} objects", worldName, m_world->ObjectCount());
 	}
 

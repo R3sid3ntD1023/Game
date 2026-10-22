@@ -57,6 +57,23 @@ namespace eng
         }
     };
 
+    // Camera component of an object. Stored after the terrain (version 14+), one entry per object.
+    struct CameraDesc
+    {
+        bool enabled = false;
+        bool primary = true; // the camera used when the world has no player
+        float fov = 60.0f;
+        float nearPlane = 0.1f;
+        float farPlane = 800.0f;
+
+        template <class Archive>
+        void serialize(Archive &ar)
+        {
+            ar(cereal::make_nvp("enabled", enabled), cereal::make_nvp("primary", primary), cereal::make_nvp("fov", fov),
+               cereal::make_nvp("nearPlane", nearPlane), cereal::make_nvp("farPlane", farPlane));
+        }
+    };
+
     struct ObjectDesc
     {
         std::string name;
@@ -71,6 +88,7 @@ namespace eng
         float health = 0.0f; // <= 0: no Health component
         std::string script;  // name registered with SceneLoader::RegisterScript
         std::vector<float> scriptParams;
+        CameraDesc camera;   // serialized separately by SaveScene/LoadScene
 
         template <class Archive>
         void serialize(Archive &ar)
@@ -83,14 +101,54 @@ namespace eng
         }
     };
 
+    // Sky, time of day and weather a world starts with. Stored after the scene (version 12+).
+    struct EnvironmentDesc
+    {
+        bool dayNightCycle = true;
+        float timeOfDay = 20.0f; // hours, 0-24
+        float dayLength = 180.0f; // real seconds per day
+        std::string skyHdr;      // empty = procedural sky; else a path relative to the assets directory
+        bool weatherAutomatic = true;
+        int32_t weather = 2; // WeatherType: 0 sunny, 1 cloudy, 2 light rain, 3 storm
+        float weatherTransition = 8.0f;
+        float windX = 0.85f;
+        float windZ = 0.35f;
+
+        template <class Archive>
+        void serialize(Archive &ar)
+        {
+            ar(cereal::make_nvp("dayNightCycle", dayNightCycle), cereal::make_nvp("timeOfDay", timeOfDay),
+               cereal::make_nvp("dayLength", dayLength), cereal::make_nvp("skyHdr", skyHdr),
+               cereal::make_nvp("weatherAutomatic", weatherAutomatic), cereal::make_nvp("weather", weather),
+               cereal::make_nvp("weatherTransition", weatherTransition), cereal::make_nvp("windX", windX),
+               cereal::make_nvp("windZ", windZ));
+        }
+    };
+
+    // Terrain heights for the world's terrain mesh. Stored after the environment (version 13+).
+    struct TerrainDesc
+    {
+        std::string heightMap = "textures/hawaii_height_map.png"; // assets-relative image; empty = procedural hills
+        float heightScale = 20.0f;                                 // metres above and below sea level at full white/black
+
+        template <class Archive>
+        void serialize(Archive &ar)
+        {
+            ar(cereal::make_nvp("heightMap", heightMap), cereal::make_nvp("heightScale", heightScale));
+        }
+    };
+
     struct SceneData
     {
         static constexpr uint32_t kMagic = 0x57444C47; // "GLDW"
-        static constexpr uint32_t kVersion = 11;
+        static constexpr uint32_t kVersion = 14;
 
         std::vector<MaterialDesc> materials;
         std::vector<MeshDesc> meshes;
         std::vector<ObjectDesc> objects;
+        EnvironmentDesc environment; // serialized by SaveScene/LoadScene, not by serialize()
+        TerrainDesc terrain;         // likewise
+        std::string ui;              // UI layout name (assets/ui/<name>.ui.json) shown while playing; empty = none
 
         int32_t AddMaterial(MaterialDesc m)
         {

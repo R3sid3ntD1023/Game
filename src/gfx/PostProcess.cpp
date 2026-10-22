@@ -33,7 +33,8 @@ namespace gfx
         if (bloomEnabled)
             bloomTex = m_bloom.Process(m_scene.ColorTexture(), threshold, radius);
 
-        Framebuffer::BindScreen(screenWidth, screenHeight);
+        glBindFramebuffer(GL_FRAMEBUFFER, outputFbo);
+        glViewport(0, 0, screenWidth, screenHeight);
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_CULL_FACE);
         m_composite.Bind();

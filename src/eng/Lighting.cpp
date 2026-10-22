@@ -12,7 +12,7 @@ namespace eng
 	{
 		auto &registry = gameObject->GetWorld().Registry();
 		registry.emplace_or_replace<Light>(gameObject->Entity(), Light{type, color, intensity, range, innerDegrees, outerDegrees, true, castShadow});
-		registry.get_or_emplace<EmissiveScale>(gameObject->Entity());
+		auto &emissive = registry.get_or_emplace<EmissiveScale>(gameObject->Entity());
 	}
 
 	void LightComponent::SetEnabled(bool enabled)

@@ -17,7 +17,13 @@ namespace eng
         void Write(Archive &ar, const SceneData &scene)
         {
             uint32_t magic = SceneData::kMagic, version = SceneData::kVersion;
-            ar(cereal::make_nvp("magic", magic), cereal::make_nvp("version", version), cereal::make_nvp("scene", scene));
+            std::vector<CameraDesc> cameras;
+            cameras.reserve(scene.objects.size());
+            for (const ObjectDesc &o : scene.objects)
+                cameras.push_back(o.camera);
+            ar(cereal::make_nvp("magic", magic), cereal::make_nvp("version", version), cereal::make_nvp("scene", scene),
+               cereal::make_nvp("environment", scene.environment), cereal::make_nvp("terrain", scene.terrain),
+               cereal::make_nvp("cameras", cameras), cereal::make_nvp("ui", scene.ui));
         }
 
         template <class Archive>
@@ -27,11 +33,23 @@ namespace eng
             ar(cereal::make_nvp("magic", magic), cereal::make_nvp("version", version));
             if (magic != SceneData::kMagic)
                 throw std::runtime_error("Not a world file: " + path);
-            if (version != SceneData::kVersion)
+            // 11: scene only; 12: + environment; 13: + terrain; 14: + cameras and UI layout.
+            if (version < 11 || version > SceneData::kVersion)
                 throw std::runtime_error("Unsupported world file version in: " + path);
 
             SceneData scene;
             ar(cereal::make_nvp("scene", scene));
+            if (version >= 12)
+                ar(cereal::make_nvp("environment", scene.environment));
+            if (version >= 13)
+                ar(cereal::make_nvp("terrain", scene.terrain));
+            if (version >= 14)
+            {
+                std::vector<CameraDesc> cameras;
+                ar(cereal::make_nvp("cameras", cameras), cereal::make_nvp("ui", scene.ui));
+                for (size_t i = 0; i < cameras.size() && i < scene.objects.size(); ++i)
+                    scene.objects[i].camera = cameras[i];
+            }
             return scene;
         }
 
