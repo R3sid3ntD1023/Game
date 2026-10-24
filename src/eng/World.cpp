@@ -1,9 +1,9 @@
 #include "eng/World.h"
-#include "eng/BuiltinComponents.h"
 #include "eng/AudioSource.h"
-#include <random>
+#include "eng/BuiltinComponents.h"
 #include <algorithm>
 #include <cmath>
+#include <random>
 
 namespace eng
 {
@@ -57,7 +57,7 @@ namespace eng
 		for (auto e : view)
 		{
 			auto &cam = view.get<CameraComponent>(e);
-			if (cam.active)
+			if (cam.primary)
 				return cam.camera;
 		}
 
@@ -88,7 +88,10 @@ namespace eng
 
 	namespace
 	{
-		float RandRange(std::mt19937 &rng, float a, float b) { return std::uniform_real_distribution<float>(a, b)(rng); }
+		float RandRange(std::mt19937 &rng, float a, float b)
+		{
+			return std::uniform_real_distribution<float>(a, b)(rng);
+		}
 
 		void Subdivide(std::mt19937 &rng, std::vector<glm::vec3> &pts, float offset, int levels)
 		{
@@ -382,7 +385,6 @@ namespace eng
 		m_renderer.ShadePass(viewProj, camera.position, m_forwardPlus.TilesX());
 		if (environment)
 			environment->DrawSky(view, proj, camera.position);
-
 
 		m_particleRenderer.Begin();
 		for (ParticleSystemComponent *e : m_particleComponents)

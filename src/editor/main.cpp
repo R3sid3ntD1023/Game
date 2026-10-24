@@ -1,13 +1,13 @@
 #include <glad/glad.h>
 
 #include "core/Window.h"
-#include "editor/Assets.h"
-#include "editor/PlaySession.h"
-#include "editor/UiEditor.h"
-#include "editor/BehaviorEditor.h"
 #include "editor/AnimationEditor.h"
+#include "editor/Assets.h"
+#include "editor/BehaviorEditor.h"
+#include "editor/PlaySession.h"
 #include "editor/PreviewMesh.h"
 #include "editor/SceneView3D.h"
+#include "editor/UiEditor.h"
 #include "eng/AssetMeta.h"
 #include "eng/Scene.h"
 #include "eng/Weather.h"
@@ -469,7 +469,7 @@ namespace
 				ImGui::EndMenu();
 			}
 			DrawTransport();
-			ImGui::TextDisabled("%s%s  |  %s", m_world.empty() ? "(no world)" : m_world.c_str(), m_dirty ? "*" : "", 			m_status.c_str());
+			ImGui::TextDisabled("%s%s  |  %s", m_world.empty() ? "(no world)" : m_world.c_str(), m_dirty ? "*" : "", m_status.c_str());
 			ImGui::EndMainMenuBar();
 
 			if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false))

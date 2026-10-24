@@ -1,4 +1,5 @@
 #include "game/FirstPersonController.h"
+#include "eng/BuiltinComponents.h"
 #include "eng/GameObject.h"
 #include "eng/World.h"
 #include "game/Weapon.h"
@@ -15,6 +16,7 @@ namespace game
 	void FirstPersonController::OnStart()
 	{
 		m_body = gameObject->GetComponent<eng::RigidBody>();
+		m_camera = gameObject->GetWorld().Registry().try_get<eng::CameraComponent>(gameObject->Entity());
 	}
 
 	void FirstPersonController::OnKey(int key, int action)
@@ -97,7 +99,7 @@ namespace game
 		m_reloadPressed = false;
 
 		const float yaw = glm::radians(m_yaw), pitch = glm::radians(m_pitch);
-		gfx::Camera &cam = gameObject->GetWorld().GetCamera();
+		gfx::Camera &cam = m_camera->camera;
 		cam.position = gameObject->GetTransform().position + glm::vec3(0.0f, 0.7f, 0.0f);
 		cam.forward = {std::cos(yaw) * std::cos(pitch), std::sin(pitch), std::sin(yaw) * std::cos(pitch)};
 	}
@@ -156,7 +158,7 @@ namespace game
 	{
 		if (auto *weapon = gameObject->GetComponent<WeaponComponent>())
 		{
-			const gfx::Camera &cam = gameObject->GetWorld().GetCamera();
+			const gfx::Camera &cam = m_camera->camera;
 			weapon->Fire(cam.position, cam.forward, m_body);
 		}
 	}

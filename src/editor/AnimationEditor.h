@@ -25,7 +25,7 @@ namespace editor
 	{
 		int from = 0, to = 0;
 		std::string param; // empty = unconditional (when the state finishes)
-		int op = 0;        // 0: >, 1: <, 2: ==, 3: true, 4: false
+		int op = 0;		   // 0: >, 1: <, 2: ==, 3: true, 4: false
 		float value = 0.0f;
 		float blendTime = 0.2f;
 	};
@@ -44,7 +44,7 @@ namespace editor
 	public:
 		AnimationEditor();
 		void Draw();
-		bool open = true;
+		bool open = false;
 
 	private:
 		void Refresh();
@@ -55,8 +55,8 @@ namespace editor
 		int AddState(float x, float y);
 		void DeleteState(int index);
 
-		int m_linkFrom = -1;      // state whose output handle is being dragged
-		int m_contextState = -1;  // state under the right-click menu, -1 for empty canvas
+		int m_linkFrom = -1;	 // state whose output handle is being dragged
+		int m_contextState = -1; // state under the right-click menu, -1 for empty canvas
 		struct Vec2f
 		{
 			float x = 0.0f, y = 0.0f;

@@ -12,7 +12,7 @@ namespace editor
 	public:
 		UiEditor();
 		void Draw();
-		bool open = true;
+		bool open = false;
 		const std::string &Status() const { return m_status; }
 
 	private:

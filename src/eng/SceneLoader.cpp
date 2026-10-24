@@ -48,8 +48,7 @@ namespace eng
 				return nullptr;
 			auto &slot = textures[src.key + (srgb ? "#srgb" : "#linear")];
 			if (!slot)
-				slot = src.encoded.empty() ? gfx::Texture::FromFile(src.path, srgb)
-										   : gfx::Texture::FromMemory(src.encoded.data(), src.encoded.size(), srgb);
+				slot = src.encoded.empty() ? gfx::Texture::FromFile(src.path, srgb) : gfx::Texture::FromMemory(src.encoded.data(), src.encoded.size(), srgb);
 			return slot;
 		};
 
@@ -162,6 +161,12 @@ namespace eng
 				go.AddComponent<RigidBody>(d.halfExtents, d.bodyStatic);
 			if (d.health > 0.0f)
 				go.AddComponent<Health>(d.health);
+			if (d.camera.enabled)
+			{
+				auto &transform = go.GetTransform();
+				gfx::Camera cam(transform.position, transform.Forward(), d.camera.fov, d.camera.nearPlane, d.camera.farPlane);
+				go.AddComponent<CameraComponent>(d.camera.primary, cam);
+			}
 			created.push_back(&go);
 		}
 

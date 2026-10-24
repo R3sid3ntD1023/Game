@@ -26,7 +26,7 @@ namespace editor
 	public:
 		BehaviorEditor();
 		void Draw();
-		bool open = true;
+		bool open = false;
 
 	private:
 		struct Pos
@@ -44,8 +44,8 @@ namespace editor
 		void DeleteSelected();
 		void AddChild(int parentId, const char *type);
 
-		int m_linkFrom = -1;      // node whose child handle is being dragged
-		int m_dragId = -1;        // node being dragged to reorder
+		int m_linkFrom = -1; // node whose child handle is being dragged
+		int m_dragId = -1;	 // node being dragged to reorder
 		bool m_dragActive = false;
 		Pos m_dragStart{0.0f, 0.0f};
 		int m_pendingParent = -1; // parent for the "add child" menu opened by dropping a link on empty space

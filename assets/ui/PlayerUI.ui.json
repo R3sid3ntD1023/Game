@@ -1,0 +1,100 @@
+{
+    "elements": [
+        {
+            "name": "Progress bar",
+            "type": 2,
+            "anchor": 0,
+            "stretchX": false,
+            "stretchY": false,
+            "visible": true,
+            "text": "",
+            "textSize": 20.0,
+            "align": 0,
+            "value": 1.0,
+            "offset": [
+                20.0,
+                660.0
+            ],
+            "size": [
+                250.0,
+                30.0
+            ],
+            "color": [
+                0.20000000298023225,
+                0.800000011920929,
+                0.30000001192092898,
+                0.8999999761581421
+            ],
+            "secondary": [
+                0.0,
+                0.0,
+                0.0,
+                0.6000000238418579
+            ]
+        },
+        {
+            "name": "Panel",
+            "type": 0,
+            "anchor": 0,
+            "stretchX": false,
+            "stretchY": false,
+            "visible": true,
+            "text": "",
+            "textSize": 20.0,
+            "align": 0,
+            "value": 1.0,
+            "offset": [
+                1112.0,
+                617.0
+            ],
+            "size": [
+                138.0,
+                82.0
+            ],
+            "color": [
+                0.11374408006668091,
+                0.11374408006668091,
+                0.11374408006668091,
+                0.19431281089782716
+            ],
+            "secondary": [
+                0.0,
+                0.0,
+                0.0,
+                0.6000000238418579
+            ]
+        },
+        {
+            "name": "Label",
+            "type": 1,
+            "anchor": 0,
+            "stretchX": false,
+            "stretchY": false,
+            "visible": true,
+            "text": "UnArmed",
+            "textSize": 33.5,
+            "align": 2,
+            "value": 1.0,
+            "offset": [
+                1127.0,
+                632.0
+            ],
+            "size": [
+                107.0,
+                37.0
+            ],
+            "color": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "secondary": [
+                0.0,
+                0.0,
+                0.0,
+                0.6000000238418579
+            ]
+        }
+    ]
+}

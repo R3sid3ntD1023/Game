@@ -35,6 +35,8 @@ namespace game
 		void UpdateFootsteps(float dt);
 
 		eng::RigidBody *m_body = nullptr;
+		eng::CameraComponent *m_camera = nullptr;
+
 		float m_yaw = 0.0f; // degrees; 0 looks down +X
 		float m_pitch = 0.0f;
 		bool m_forward = false, m_back = false, m_left = false, m_right = false, m_sprint = false, m_jump = false;

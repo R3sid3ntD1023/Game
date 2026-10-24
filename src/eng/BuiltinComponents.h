@@ -66,8 +66,15 @@ namespace eng
 	{
 	public:
 		CameraComponent() = default;
+		CameraComponent(bool primary, const gfx::Camera &camera)
+			: primary(primary),
+			  camera(camera)
+		{
+		}
 
-		bool active = true;
+		void OnAttach() override;
+
+		bool primary = true;
 		gfx::Camera camera;
 	};
 

@@ -17,12 +17,12 @@
 #include "game/FirstPersonController.h"
 #include "game/Game.h"
 #include "game/GameContent.h"
+#include "game/GrassGen.h"
 #include "game/HerbivoreAI.h"
 #include "game/HerbivoreModel.h"
-#include "game/Plant.h"
-#include "game/GrassGen.h"
 #include "game/Interaction.h"
 #include "game/IslandScene.h"
+#include "game/Plant.h"
 #include "game/RaptorModel.h"
 #include "game/Terrain.h"
 #include "game/TreeGen.h"
@@ -357,11 +357,17 @@ namespace game
 			titleTimer += dt;
 			if (titleTimer >= 0.25)
 			{
-				m_window.SetTitle(std::format("Escape the Island | {} fps | {} draws | {:02d}:{:02d} | {}", static_cast<int>(frames / titleTimer), m_world ? m_world->DrawCalls() : 0,
-											  m_world ? static_cast<int>(m_world->DayNight().timeOfDay) : 0,
-											  m_world ? static_cast<int>(std::fmod(m_world->DayNight().timeOfDay, 1.0f) 											  * 60.0f) : 0,
-											  											  m_world ? WeatherName(m_world->Weather().Current()) : ""));
-											  				frames = 0;
+				m_window.SetTitle(
+					std::format(
+						"Escape the Island | {} fps | {} draws | {:02d}:{:02d} | {}",
+						static_cast<int>(frames / titleTimer),
+						m_world ? m_world->DrawCalls() : 0,
+						m_world ? static_cast<int>(m_world->DayNight().timeOfDay) : 0,
+						m_world ? static_cast<int>(std::fmod(m_world->DayNight().timeOfDay, 1.0f) * 60.0f) : 0,
+						m_world ? WeatherName(m_world->Weather().Current()) : ""
+					)
+				);
+				frames = 0;
 				titleTimer = 0.0;
 			}
 		}

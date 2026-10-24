@@ -193,7 +193,8 @@ namespace game
 			kScriptLightPost,
 			[](eng::GameObject &go, const std::vector<float> &p)
 			{
-				go.AddComponent<eng::PointLightComponent>(glm::vec3(Param(p, 4, 1.0f), Param(p, 5, 0.7f), Param(p, 6, 0.4f)), Param(p, 0, 120.0f), Param(p, 1, 28.0f)).SetCastShadow(false);
+				go.AddComponent<eng::PointLightComponent>(glm::vec3(Param(p, 4, 1.0f), Param(p, 5, 0.7f), Param(p, 6, 0.4f)), Param(p, 0, 120.0f), Param(p, 1, 28.0f))
+					.SetCastShadow(false);
 				go.AddComponent<eng::LightFlicker>(Param(p, 2, 0.5f), static_cast<uint32_t>(Param(p, 3, 1.0f)));
 			}
 		);
